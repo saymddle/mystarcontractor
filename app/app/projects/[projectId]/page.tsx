@@ -6,11 +6,17 @@ import {
 } from "@/lib/data";
 import {
   assignClientAction,
+  createClientInviteAction,
   createMilestoneAction,
+  markProjectMessagesReadAction,
+  markNotificationsReadAction,
+  publishUpdateAction,
+  sendMessageAction,
   updateMilestoneAction,
   uploadDocumentAction,
   uploadPhotoAction
 } from "@/app/app/actions";
+import { RealtimeRefresh } from "@/components/realtime-refresh";
 import type {
   AssetVisibility,
   DocumentCategory,
@@ -146,6 +152,13 @@ export default async function ProjectDetailPage({
 
   return (
     <section className="dashboard-stack">
+      <RealtimeRefresh
+        channels={[
+          { schema: "public", table: "project_messages", filter: `project_id=eq.${data.project.id}` },
+          { schema: "public", table: "project_updates", filter: `project_id=eq.${data.project.id}` },
+          { schema: "public", table: "notifications", filter: `user_id=eq.${profile.id}` }
+        ]}
+      />
       <article className="panel">
         <p className="eyebrow">Project detail</p>
         <h1>{data.project.name}</h1>
@@ -210,6 +223,19 @@ export default async function ProjectDetailPage({
               </li>
             ))}
           </ul>
+          {profile.role === "pm" && data.invites.length > 0 ? (
+            <div className="invite-list">
+              <p className="eyebrow">Pending invites</p>
+              {data.invites.map((invite) => (
+                <div key={invite.id} className="invite-card">
+                  <strong>{invite.email}</strong>
+                  <span>
+                    {invite.status} until {formatDate(invite.expires_at)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : null}
         </article>
 
         <article className="panel">
@@ -251,6 +277,18 @@ export default async function ProjectDetailPage({
               </label>
               <button type="submit" className="button button--solid">
                 Assign client
+              </button>
+            </form>
+            <div className="panel__divider" />
+            <p className="eyebrow">Invite new client</p>
+            <form action={createClientInviteAction} className="form-grid">
+              <input type="hidden" name="projectId" value={data.project.id} />
+              <label className="field">
+                <span>Email</span>
+                <input type="email" name="email" required />
+              </label>
+              <button type="submit" className="button button--ghost">
+                Send invite
               </button>
             </form>
           </article>
@@ -550,6 +588,117 @@ export default async function ProjectDetailPage({
           </ul>
         )}
       </article>
+
+      <section className="content-grid">
+        <article className="panel">
+          <div className="panel__heading">
+            <p className="eyebrow">Project updates</p>
+            <h2>Published updates and internal notes</h2>
+          </div>
+          {profile.role === "pm" ? (
+            <form action={publishUpdateAction} className="form-grid">
+              <input type="hidden" name="projectId" value={data.project.id} />
+              <label className="field">
+                <span>Title</span>
+                <input type="text" name="title" required />
+              </label>
+              <label className="field">
+                <span>Visibility</span>
+                <select name="visibility" defaultValue="client_visible">
+                  {visibilityOptions.map((value) => (
+                    <option key={value} value={value}>
+                      {value.replace("_", " ")}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span>Attach to milestone</span>
+                <select name="milestoneId" defaultValue="">
+                  <option value="">No milestone</option>
+                  {data.milestones.map((milestone) => (
+                    <option key={milestone.id} value={milestone.id}>
+                      {milestone.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field field--full">
+                <span>Update body</span>
+                <textarea name="body" rows={4} required />
+              </label>
+              <button type="submit" className="button button--solid">
+                Publish update
+              </button>
+            </form>
+          ) : null}
+          {data.updates.length === 0 ? (
+            <p className="hero-text">No project updates have been published yet.</p>
+          ) : (
+            <div className="editor-list">
+              {data.updates.map((update) => (
+                <article key={update.id} className="editor-card">
+                  <div className="editor-card__header">
+                    <strong>{update.title}</strong>
+                    <span className="status-pill">
+                      {update.visibility.replace("_", " ")}
+                    </span>
+                  </div>
+                  <p className="message-copy">{update.body}</p>
+                  <small>{formatDate(update.created_at)}</small>
+                </article>
+              ))}
+            </div>
+          )}
+        </article>
+
+        <article className="panel">
+          <div className="panel__heading">
+            <p className="eyebrow">Messages</p>
+            <h2>Project conversation</h2>
+          </div>
+          {data.messages.length === 0 ? (
+            <p className="hero-text">No messages in this thread yet.</p>
+          ) : (
+            <div className="chat-thread">
+              {data.messages.map((message) => (
+                <article
+                  key={message.id}
+                  className={`chat-bubble ${message.sender_id === profile.id ? "chat-bubble--self" : ""}`}
+                >
+                  <div className="chat-bubble__meta">
+                    <strong>{message.sender_name}</strong>
+                    <span>{message.is_read ? "Read" : "Unread"}</span>
+                  </div>
+                  <p>{message.body}</p>
+                  <small>{formatDate(message.created_at)}</small>
+                </article>
+              ))}
+            </div>
+          )}
+          <form action={sendMessageAction} className="form-stack">
+            <input type="hidden" name="projectId" value={data.project.id} />
+            <label className="field">
+              <span>New message</span>
+              <textarea name="body" rows={4} required />
+            </label>
+            <button type="submit" className="button button--solid">
+              Send message
+            </button>
+          </form>
+          <form action={markProjectMessagesReadAction}>
+            <input type="hidden" name="projectId" value={data.project.id} />
+            <button type="submit" className="button button--ghost">
+              Mark thread read
+            </button>
+          </form>
+          <form action={markNotificationsReadAction}>
+            <button type="submit" className="button button--ghost">
+              Mark notifications read
+            </button>
+          </form>
+        </article>
+      </section>
     </section>
   );
 }

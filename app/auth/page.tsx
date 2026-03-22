@@ -3,6 +3,7 @@ import { AuthForms } from "@/components/auth-forms";
 import { BrandHeader } from "@/components/brand-header";
 import { SetupPanel } from "@/components/setup-panel";
 import { getOptionalUserContext } from "@/lib/auth";
+import { getInviteByToken } from "@/lib/data";
 import { hasSupabaseEnv } from "@/lib/supabase";
 import { signInAction, signUpAction } from "@/app/auth/actions";
 
@@ -11,7 +12,7 @@ export const dynamic = "force-dynamic";
 export default async function AuthPage({
   searchParams
 }: {
-  searchParams: Promise<{ error?: string; message?: string }>;
+  searchParams: Promise<{ error?: string; message?: string; invite?: string }>;
 }) {
   if (!hasSupabaseEnv()) {
     return (
@@ -29,17 +30,26 @@ export default async function AuthPage({
   }
 
   const params = await searchParams;
+  const invite = params.invite ? await getInviteByToken(params.invite) : null;
+  const inviteExpired =
+    invite?.expires_at ? new Date(invite.expires_at).getTime() <= Date.now() : false;
+  const inviteUsable = invite && invite.status === "pending" && !inviteExpired;
 
   return (
     <main className="landing-page">
       <BrandHeader />
       <section className="hero-panel">
         <div className="hero-copy">
-          <p className="eyebrow">Phase 1 access</p>
-          <h1>Sign in or create your organization workspace.</h1>
+          <p className="eyebrow">Phase 3 onboarding</p>
+          <h1>
+            {inviteUsable
+              ? `Join ${invite.organization_name} and access ${invite.project_name}.`
+              : "Sign in or create your organization workspace."}
+          </h1>
           <p className="hero-text">
-            Project managers create the organization and first project. Clients
-            sign up using the organization slug already assigned to them.
+            {inviteUsable
+              ? `This invite is reserved for ${invite.email}. Create the client login with that email and you'll be added to the project automatically.`
+              : "Project managers create the organization and first project. Clients can sign up with an invite link or the organization slug already assigned to them."}
           </p>
         </div>
       </section>
@@ -48,6 +58,14 @@ export default async function AuthPage({
         signUpAction={signUpAction}
         message={params.message}
         error={params.error}
+        invite={
+          invite
+            ? {
+                ...invite,
+                usable: Boolean(inviteUsable)
+              }
+            : undefined
+        }
       />
     </main>
   );

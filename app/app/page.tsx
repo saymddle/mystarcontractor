@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Route } from "next";
-import { getProjectsForProfile } from "@/lib/data";
+import { getOnboardingSummary, getProjectsForProfile } from "@/lib/data";
 import { requireUserContext } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -12,6 +12,7 @@ export default async function AppDashboard({
 }) {
   const { profile } = await requireUserContext();
   const projects = await getProjectsForProfile(profile);
+  const onboarding = await getOnboardingSummary(profile);
   const params = await searchParams;
   const recentProjects = projects.slice(0, 3);
 
@@ -46,6 +47,33 @@ export default async function AppDashboard({
         </article>
       </section>
 
+      {profile.role === "pm" ? (
+        <article className="panel">
+          <div className="panel__heading">
+            <p className="eyebrow">Onboarding</p>
+            <h2>Launch checklist</h2>
+          </div>
+          <ul className="list">
+            <li>
+              <strong>Create your first project</strong>
+              <span>{onboarding.projectCount > 0 ? "Complete" : "Pending"}</span>
+            </li>
+            <li>
+              <strong>Add or invite a client</strong>
+              <span>
+                {onboarding.clientCount > 0 || onboarding.pendingInviteCount > 0
+                  ? "In progress"
+                  : "Pending"}
+              </span>
+            </li>
+            <li>
+              <strong>Publish an update and send a message</strong>
+              <span>{onboarding.projectCount > 0 ? "Ready" : "Blocked"}</span>
+            </li>
+          </ul>
+        </article>
+      ) : null}
+
       {params.error ? (
         <article className="panel panel--error">
           <p className="eyebrow">Action failed</p>
@@ -59,11 +87,13 @@ export default async function AppDashboard({
           <h2>{profile.role === "pm" ? "Your organization" : "Your assignments"}</h2>
         </div>
         {recentProjects.length === 0 ? (
-          <p className="hero-text">
-            {profile.role === "pm"
-              ? "Create your first project in the Projects view."
-              : "No projects have been assigned to your account yet."}
-          </p>
+          <div className="empty-state">
+            <p className="hero-text">
+              {profile.role === "pm"
+                ? "Create your first project in the Projects view and start publishing structured updates from there."
+                : "No projects have been assigned to your account yet. Once your PM assigns one, messages and published updates will show up here."}
+            </p>
+          </div>
         ) : (
           <div className="project-list">
             {recentProjects.map((project) => (

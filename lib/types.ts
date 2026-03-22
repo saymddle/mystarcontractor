@@ -28,7 +28,12 @@ export type ActivityEventType =
   | "milestone_created"
   | "milestone_updated"
   | "document_uploaded"
-  | "photo_uploaded";
+  | "photo_uploaded"
+  | "update_published";
+
+export type NotificationKind = "message" | "update";
+
+export type InviteStatus = "pending" | "accepted" | "revoked" | "expired";
 
 export interface OrganizationRecord {
   id: string;
@@ -119,6 +124,60 @@ export interface ActivityRecord {
   created_at: string;
 }
 
+export interface ProjectMessageRecord {
+  id: string;
+  project_id: string;
+  sender_id: string;
+  body: string;
+  created_at: string;
+  sender_name?: string;
+  is_read?: boolean;
+}
+
+export interface ProjectUpdateRecord {
+  id: string;
+  project_id: string;
+  milestone_id: string | null;
+  title: string;
+  body: string;
+  visibility: AssetVisibility;
+  created_by: string;
+  created_at: string;
+}
+
+export interface NotificationRecord {
+  id: string;
+  user_id: string;
+  project_id: string | null;
+  kind: NotificationKind;
+  title: string;
+  detail: string | null;
+  link_path: string | null;
+  read_at: string | null;
+  created_at: string;
+}
+
+export interface ProjectInviteRecord {
+  id: string;
+  project_id: string;
+  email: string;
+  token: string;
+  status: InviteStatus;
+  created_at: string;
+  expires_at: string | null;
+  accepted_at: string | null;
+}
+
+export interface InviteLookupRecord {
+  token: string;
+  email: string;
+  status: InviteStatus;
+  expires_at: string | null;
+  project_name: string;
+  organization_slug: string;
+  organization_name: string;
+}
+
 export interface ProfileWithOrganization extends ProfileRecord {
   organization: OrganizationRecord | null;
 }
@@ -137,4 +196,7 @@ export interface ProjectWorkspace {
   documents: DocumentRecord[];
   photos: PhotoRecord[];
   activity: ActivityRecord[];
+  messages: ProjectMessageRecord[];
+  updates: ProjectUpdateRecord[];
+  invites: ProjectInviteRecord[];
 }

@@ -6,11 +6,16 @@ import type {
   ActivityRecord,
   AssetVisibility,
   DocumentRecord,
+  InviteLookupRecord,
   MilestoneRecord,
+  NotificationRecord,
   PhotoRecord,
   ProfileWithOrganization,
+  ProjectInviteRecord,
+  ProjectMessageRecord,
   ProjectMemberRecord,
   ProjectRecord,
+  ProjectUpdateRecord,
   ProjectWithMembers,
   ProjectWorkspace
 } from "@/lib/types";
@@ -212,11 +217,162 @@ export async function getProjectWorkspaceForProfile(
   const [{ data: documents }, { data: photos }, { data: activity }] =
     await Promise.all([documentQuery, photoQuery, activityQuery]);
 
+  const { data: messages } = await supabase
+    .from("project_messages")
+    .select("id, project_id, sender_id, body, created_at")
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: true })
+    .limit(50);
+
+  const { data: updates } = await supabase
+    .from("project_updates")
+    .select(
+      "id, project_id, milestone_id, title, body, visibility, created_by, created_at"
+    )
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: false })
+    .limit(20);
+
+  const { data: invites } =
+    profile.role === "pm"
+      ? await supabase
+          .from("project_invites")
+          .select("id, project_id, email, token, status, created_at, expires_at, accepted_at")
+          .eq("project_id", projectId)
+          .order("created_at", { ascending: false })
+      : { data: [] };
+
+  const messageIds = (messages ?? []).map((message) => message.id);
+  let readSet = new Set<string>();
+
+  if (messageIds.length > 0) {
+    const { data: reads } = await supabase
+      .from("project_message_reads")
+      .select("message_id")
+      .eq("user_id", profile.id)
+      .in("message_id", messageIds);
+
+    readSet = new Set((reads ?? []).map((entry) => entry.message_id));
+  }
+
+  const senderIds = [...new Set((messages ?? []).map((message) => message.sender_id))];
+  let senderDirectory = new Map<string, string>();
+
+  if (senderIds.length > 0) {
+    const { data: senders } = await supabase
+      .from("profiles")
+      .select("id, full_name")
+      .in("id", senderIds);
+
+    senderDirectory = new Map(
+      (senders ?? []).map((entry) => [entry.id, entry.full_name ?? "Unnamed user"])
+    );
+  }
+
   return {
     ...base,
     documents: await attachSignedUrls((documents ?? []) as DocumentRecord[]),
     photos: await attachSignedUrls((photos ?? []) as PhotoRecord[]),
-    activity: (activity ?? []) as ActivityRecord[]
+    activity: (activity ?? []) as ActivityRecord[],
+    messages: ((messages ?? []) as ProjectMessageRecord[]).map((message) => ({
+      ...message,
+      sender_name: senderDirectory.get(message.sender_id) ?? "Unnamed user",
+      is_read: message.sender_id === profile.id ? true : readSet.has(message.id)
+    })),
+    updates: (updates ?? []) as ProjectUpdateRecord[],
+    invites: (invites ?? []) as ProjectInviteRecord[]
+  };
+}
+
+export async function getNotificationsForProfile(profileId: string) {
+  const supabase = await createSupabaseServerClient();
+  const { data } = await supabase
+    .from("notifications")
+    .select("id, user_id, project_id, kind, title, detail, link_path, read_at, created_at")
+    .eq("user_id", profileId)
+    .order("created_at", { ascending: false })
+    .limit(8);
+
+  return (data ?? []) as NotificationRecord[];
+}
+
+export async function getInviteByToken(token: string) {
+  if (!token) {
+    return null;
+  }
+
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin
+    .from("project_invites")
+    .select(
+      "token, email, status, expires_at, projects(name, organizations(name, slug))"
+    )
+    .eq("token", token)
+    .maybeSingle<{
+      token: string;
+      email: string;
+      status: InviteLookupRecord["status"];
+      expires_at: string | null;
+      projects:
+        | {
+            name: string;
+            organizations:
+              | {
+                  name: string;
+                  slug: string;
+                }
+              | {
+                  name: string;
+                  slug: string;
+                }[];
+          }
+        | null;
+    }>();
+
+  if (!data?.projects) {
+    return null;
+  }
+
+  const organization = Array.isArray(data.projects.organizations)
+    ? data.projects.organizations[0]
+    : data.projects.organizations;
+
+  if (!organization) {
+    return null;
+  }
+
+  return {
+    token: data.token,
+    email: data.email,
+    status: data.status,
+    expires_at: data.expires_at,
+    project_name: data.projects.name,
+    organization_slug: organization.slug,
+    organization_name: organization.name
+  } satisfies InviteLookupRecord;
+}
+
+export async function getOnboardingSummary(profile: ProfileWithOrganization) {
+  const projects = await getProjectsForProfile(profile);
+
+  const supabase = await createSupabaseServerClient();
+  const [{ count: clientCount }, { count: pendingInviteCount }] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("*", { count: "exact", head: true })
+      .eq("organization_id", profile.organization_id)
+      .eq("role", "client"),
+    supabase
+      .from("project_invites")
+      .select("*", { count: "exact", head: true })
+      .eq("organization_id", profile.organization_id)
+      .eq("status", "pending")
+  ]);
+
+  return {
+    projectCount: projects.length,
+    clientCount: clientCount ?? 0,
+    pendingInviteCount: pendingInviteCount ?? 0
   };
 }
 

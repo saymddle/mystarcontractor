@@ -4,8 +4,8 @@ Construction management platform for project managers and clients.
 
 ## Current status
 
-- Current phase: `Phase 3 - Client Collaboration and Launch Hardening`
-- Overall status: `Phase 2 implemented, migrated to Supabase, and validated for milestone, document, photo, and activity visibility`
+- Current phase: `Phase 3 complete`
+- Overall status: `Phase 3 is implemented, migrated to Supabase, and validated for invites, messaging, updates, notifications, and demo seeding`
 - Rule: update this README whenever a phase is completed or the roadmap changes
 
 ## Tech stack
@@ -27,8 +27,16 @@ Construction management platform for project managers and clients.
 - Photo upload and visibility controls
 - Unified activity timeline
 - Project-level search and asset filters
+- Project-scoped messaging
+- Message read tracking
+- PM-published project updates
+- In-app notifications
+- Client invite onboarding flow
+- Optional email notifications through Resend-compatible env vars
+- Realtime refresh for project collaboration views
 - Supabase SSR auth helpers
-- Phase 1 and Phase 2 SQL schema and RLS migrations
+- Demo seed script for release prep
+- Phase 1, Phase 2, and Phase 3 SQL schema and RLS migrations
 - Live Supabase project connected and validated
 
 ## Phased roadmap
@@ -125,36 +133,56 @@ Definition of done:
 
 ### Phase 3 - Client Collaboration and Launch Hardening
 
+Status: `Complete`
+
 Goal: finish the client workflow and prepare the MVP for real usage.
 
 Tasks in build order:
 
-1. Build messaging.
+1. [x] Build messaging.
    - Add project-scoped PM/client conversation threads.
    - Use Supabase realtime for new messages.
    - Track sent and read state.
-2. Build client update publishing.
+2. [x] Build client update publishing.
    - Allow PM to publish structured project updates.
    - Show published updates in the client portal and activity feed.
    - Keep internal notes separate.
-3. Add notifications.
+3. [x] Add notifications.
    - In-app notifications for messages and published updates.
    - Basic email notifications for unread messages and new client-visible updates.
-4. Harden onboarding and empty states.
+4. [x] Harden onboarding and empty states.
    - PM onboarding: create org, create first project, invite first client.
    - Client onboarding: accept invite and access assigned project.
-5. Add operational guardrails.
+5. [x] Add operational guardrails.
    - Audit critical actions.
    - Add upload validation, permission checks, and error states.
-6. QA and release prep.
+6. [x] QA and release prep.
    - Seed a realistic demo workspace.
    - Validate desktop and mobile behavior.
    - Prepare Vercel + Supabase deployment settings.
+
+Completed validation:
+
+- [x] Applied `0004_phase3_collaboration.sql` to the live Supabase project
+- [x] Verified PM can send project messages under RLS
+- [x] Verified client can read PM messages and reply under RLS
+- [x] Verified PM can publish internal and client-visible updates
+- [x] Verified client only sees client-visible updates
+- [x] Verified outsiders cannot read project messages
+- [x] Applied `0005_phase3_completion.sql` to the live Supabase project
+- [x] Verified invite-triggered client membership creation
+- [x] Verified invite status flips to `accepted`
+- [x] Verified project message read receipts
+- [x] Verified demo seeding with `npm run seed:demo`
+- [x] Verified local `npm run typecheck`
+- [x] Verified local `npm run lint`
+- [x] Verified local `npm run build`
 
 Definition of done:
 
 - PM and client can collaborate in near real time.
 - PM can publish updates and the client receives them in the portal.
+- PM can invite new clients with a direct onboarding link.
 - The MVP is stable enough for demo use and initial release testing.
 
 ## How to update this roadmap
@@ -188,6 +216,13 @@ Create `.env.local` when you are ready to connect Supabase:
 
 - `NEXT_PUBLIC_SUPABASE_URL=your-project-url`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key`
+- `SUPABASE_SERVICE_ROLE_KEY=your-service-role-key`
+- `APP_ORIGIN=http://localhost:3000`
+
+Optional for outbound email notifications:
+
+- `RESEND_API_KEY=your-resend-api-key`
+- `NOTIFICATION_FROM_EMAIL=updates@yourdomain.com`
 
 ## Supabase setup
 
@@ -196,14 +231,33 @@ Run the SQL in:
 - `supabase/migrations/0001_phase1_foundation.sql`
 - `supabase/migrations/0002_phase1_policy_fix.sql`
 - `supabase/migrations/0003_phase2_core_operations.sql`
+- `supabase/migrations/0004_phase3_collaboration.sql`
+- `supabase/migrations/0005_phase3_completion.sql`
 
 These migrations create and fix:
 
 - organizations, profiles, projects, project_members, and milestones
 - documents, photos, and activity events
+- project messages, project updates, and notifications
+- project invites and invite auto-assignment
 - role/status enums
 - asset visibility, document category, and activity event enums
 - profile bootstrap trigger on `auth.users`
 - row-level security policies for PM/client access control
 - follow-up policy fix for project membership and client project visibility
 - Phase 2 storage bucket and asset visibility rules
+
+## Demo seed
+
+Run:
+
+- `npm run seed:demo`
+
+This creates:
+
+- one PM account
+- one client account
+- one in-progress demo project
+- three milestones
+- one published update
+- a starter PM/client message thread
