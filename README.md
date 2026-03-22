@@ -4,8 +4,8 @@ Construction management platform for project managers and clients.
 
 ## Current status
 
-- Current phase: `Phase 2 - Core Project Operations`
-- Overall status: `Phase 1 implemented, connected to Supabase, and validated against live PM/client access flow`
+- Current phase: `Phase 3 - Client Collaboration and Launch Hardening`
+- Overall status: `Phase 2 implemented, migrated to Supabase, and validated for milestone, document, photo, and activity visibility`
 - Rule: update this README whenever a phase is completed or the roadmap changes
 
 ## Tech stack
@@ -22,8 +22,13 @@ Construction management platform for project managers and clients.
 - Protected `/app` route tree
 - PM/client role-aware dashboard
 - Project creation and client assignment flow
+- Milestone CRUD in the project workspace
+- Document upload and visibility controls
+- Photo upload and visibility controls
+- Unified activity timeline
+- Project-level search and asset filters
 - Supabase SSR auth helpers
-- Phase 1 SQL schema and RLS migrations
+- Phase 1 and Phase 2 SQL schema and RLS migrations
 - Live Supabase project connected and validated
 
 ## Phased roadmap
@@ -75,31 +80,42 @@ Definition of done:
 
 ### Phase 2 - Core Project Operations
 
+Status: `Complete`
+
 Goal: make the platform operational for real construction project management.
 
 Tasks in build order:
 
-1. Build milestone and progress tracking.
+1. [x] Build milestone and progress tracking.
    - Add milestone CRUD under each project.
    - Track status, due date, notes, and percent complete.
    - Derive overall project completion from milestone progress.
-2. Build document management.
+2. [x] Build document management.
    - Create `documents` table and storage bucket.
    - Add metadata, categories, and visibility control.
    - Default uploads to internal-only.
-3. Build photo tracking.
+3. [x] Build photo tracking.
    - Create `photos` table and storage integration.
    - Support caption, area, upload date, and visibility.
    - Allow linking photos to milestones.
-4. Build the unified activity timeline.
+4. [x] Build the unified activity timeline.
    - Show milestone changes, document uploads, photo uploads, and client-visible updates.
    - Filter client activity to published items only.
-5. Build the project detail workspace.
+5. [x] Build the project detail workspace.
    - Add `Overview`, `Milestones`, `Documents`, `Photos`, and `Activity` sections.
    - PM gets edit controls; client gets filtered read-only access.
-6. Add search and filtering.
+6. [x] Add search and filtering.
    - Filter by category, date, milestone, and visibility.
    - Search document titles and photo captions within a project.
+
+Completed validation:
+
+- [x] Applied `0003_phase2_core_operations.sql` to the live Supabase project
+- [x] Verified milestone creation and visibility
+- [x] Verified document visibility splits internal vs client-visible
+- [x] Verified photo visibility splits internal vs client-visible
+- [x] Verified activity timeline filters to client-visible items for clients
+- [x] Verified PM can see complete project asset state
 
 Definition of done:
 
@@ -179,11 +195,15 @@ Run the SQL in:
 
 - `supabase/migrations/0001_phase1_foundation.sql`
 - `supabase/migrations/0002_phase1_policy_fix.sql`
+- `supabase/migrations/0003_phase2_core_operations.sql`
 
 These migrations create and fix:
 
 - organizations, profiles, projects, project_members, and milestones
+- documents, photos, and activity events
 - role/status enums
+- asset visibility, document category, and activity event enums
 - profile bootstrap trigger on `auth.users`
 - row-level security policies for PM/client access control
 - follow-up policy fix for project membership and client project visibility
+- Phase 2 storage bucket and asset visibility rules

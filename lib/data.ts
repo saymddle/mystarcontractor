@@ -1,10 +1,18 @@
-import { createSupabaseServerClient } from "@/lib/supabase";
+import {
+  createSupabaseAdminClient,
+  createSupabaseServerClient
+} from "@/lib/supabase";
 import type {
+  ActivityRecord,
+  AssetVisibility,
+  DocumentRecord,
   MilestoneRecord,
+  PhotoRecord,
   ProfileWithOrganization,
   ProjectMemberRecord,
   ProjectRecord,
-  ProjectWithMembers
+  ProjectWithMembers,
+  ProjectWorkspace
 } from "@/lib/types";
 
 async function getClientProjects(profile: ProfileWithOrganization) {
@@ -114,6 +122,101 @@ export async function getProjectByIdForProfile(
       }))
     } satisfies ProjectWithMembers,
     milestones: (milestones ?? []) as MilestoneRecord[]
+  };
+}
+
+async function attachSignedUrls<T extends { file_path: string }>(
+  rows: T[]
+): Promise<Array<T & { file_url: string | null }>> {
+  if (rows.length === 0) {
+    return [];
+  }
+
+  const admin = createSupabaseAdminClient();
+  const signed = await Promise.all(
+    rows.map(async (row) => {
+      const { data } = await admin.storage
+        .from("project-assets")
+        .createSignedUrl(row.file_path, 60 * 60);
+
+      return {
+        ...row,
+        file_url: data?.signedUrl ?? null
+      };
+    })
+  );
+
+  return signed;
+}
+
+export async function getProjectWorkspaceForProfile(
+  projectId: string,
+  profile: ProfileWithOrganization,
+  filters: {
+    query?: string;
+    visibility?: AssetVisibility | "all";
+    documentCategory?: string;
+  }
+): Promise<ProjectWorkspace | null> {
+  const base = await getProjectByIdForProfile(projectId, profile);
+
+  if (!base) {
+    return null;
+  }
+
+  const supabase = await createSupabaseServerClient();
+
+  let documentQuery = supabase
+    .from("documents")
+    .select(
+      "id, project_id, milestone_id, title, category, visibility, file_path, file_name, content_type, file_size, uploaded_by, uploaded_at"
+    )
+    .eq("project_id", projectId)
+    .order("uploaded_at", { ascending: false });
+
+  let photoQuery = supabase
+    .from("photos")
+    .select(
+      "id, project_id, milestone_id, caption, area, visibility, file_path, file_name, content_type, file_size, uploaded_by, uploaded_at"
+    )
+    .eq("project_id", projectId)
+    .order("uploaded_at", { ascending: false });
+
+  let activityQuery = supabase
+    .from("activity_events")
+    .select(
+      "id, project_id, event_type, visibility, title, detail, created_by, created_at"
+    )
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: false })
+    .limit(20);
+
+  const q = filters.query?.trim();
+
+  if (q) {
+    documentQuery = documentQuery.ilike("title", `%${q}%`);
+    photoQuery = photoQuery.or(`caption.ilike.%${q}%,area.ilike.%${q}%`);
+    activityQuery = activityQuery.or(`title.ilike.%${q}%,detail.ilike.%${q}%`);
+  }
+
+  if (filters.visibility && filters.visibility !== "all") {
+    documentQuery = documentQuery.eq("visibility", filters.visibility);
+    photoQuery = photoQuery.eq("visibility", filters.visibility);
+    activityQuery = activityQuery.eq("visibility", filters.visibility);
+  }
+
+  if (filters.documentCategory && filters.documentCategory !== "all") {
+    documentQuery = documentQuery.eq("category", filters.documentCategory);
+  }
+
+  const [{ data: documents }, { data: photos }, { data: activity }] =
+    await Promise.all([documentQuery, photoQuery, activityQuery]);
+
+  return {
+    ...base,
+    documents: await attachSignedUrls((documents ?? []) as DocumentRecord[]),
+    photos: await attachSignedUrls((photos ?? []) as PhotoRecord[]),
+    activity: (activity ?? []) as ActivityRecord[]
   };
 }
 

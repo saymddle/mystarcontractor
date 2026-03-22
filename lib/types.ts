@@ -12,6 +12,24 @@ export type MilestoneStatus =
   | "blocked"
   | "complete";
 
+export type AssetVisibility = "internal" | "client_visible";
+
+export type DocumentCategory =
+  | "contracts"
+  | "permits"
+  | "plans"
+  | "invoices"
+  | "change_orders"
+  | "other";
+
+export type ActivityEventType =
+  | "project_created"
+  | "client_assigned"
+  | "milestone_created"
+  | "milestone_updated"
+  | "document_uploaded"
+  | "photo_uploaded";
+
 export interface OrganizationRecord {
   id: string;
   name: string;
@@ -58,6 +76,49 @@ export interface MilestoneRecord {
   created_at: string;
 }
 
+export interface DocumentRecord {
+  id: string;
+  project_id: string;
+  milestone_id: string | null;
+  title: string;
+  category: DocumentCategory;
+  visibility: AssetVisibility;
+  file_path: string;
+  file_name: string;
+  content_type: string | null;
+  file_size: number | null;
+  uploaded_by: string;
+  uploaded_at: string;
+  file_url?: string | null;
+}
+
+export interface PhotoRecord {
+  id: string;
+  project_id: string;
+  milestone_id: string | null;
+  caption: string | null;
+  area: string | null;
+  visibility: AssetVisibility;
+  file_path: string;
+  file_name: string;
+  content_type: string | null;
+  file_size: number | null;
+  uploaded_by: string;
+  uploaded_at: string;
+  file_url?: string | null;
+}
+
+export interface ActivityRecord {
+  id: string;
+  project_id: string;
+  event_type: ActivityEventType;
+  visibility: AssetVisibility;
+  title: string;
+  detail: string | null;
+  created_by: string;
+  created_at: string;
+}
+
 export interface ProfileWithOrganization extends ProfileRecord {
   organization: OrganizationRecord | null;
 }
@@ -68,4 +129,12 @@ export interface ProjectWithMembers extends ProjectRecord {
     fullName: string;
     role: UserRole;
   }>;
+}
+
+export interface ProjectWorkspace {
+  project: ProjectWithMembers;
+  milestones: MilestoneRecord[];
+  documents: DocumentRecord[];
+  photos: PhotoRecord[];
+  activity: ActivityRecord[];
 }
