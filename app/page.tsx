@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { BrandHeader } from "@/components/brand-header";
+import { getOptionalUserContext } from "@/lib/auth";
 import {
   activityFeed,
   clientMoments,
@@ -14,7 +16,15 @@ const platformPillars = [
   "Role-aware communication between project managers and clients"
 ];
 
-export default function HomePage() {
+export const dynamic = "force-dynamic";
+
+export default async function HomePage() {
+  const context = await getOptionalUserContext();
+
+  if (context) {
+    redirect("/app");
+  }
+
   return (
     <main className="landing-page">
       <BrandHeader />
@@ -29,11 +39,11 @@ export default function HomePage() {
             build down.
           </p>
           <div className="hero-actions">
-            <Link href="/pm" className="button button--solid">
-              View PM dashboard
+            <Link href="/auth" className="button button--solid">
+              Sign in or create account
             </Link>
-            <Link href="/client" className="button button--ghost">
-              View client portal
+            <Link href="/app" className="button button--ghost">
+              Open app workspace
             </Link>
           </div>
         </div>

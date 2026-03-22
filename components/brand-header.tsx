@@ -3,7 +3,8 @@ import Link from "next/link";
 const navItems = [
   { href: "#platform", label: "Platform" },
   { href: "#roles", label: "Roles" },
-  { href: "#workflow", label: "Workflow" }
+  { href: "#workflow", label: "Workflow" },
+  { href: "/auth", label: "Access" }
 ];
 
 export function BrandHeader() {

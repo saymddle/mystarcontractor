@@ -4,8 +4,8 @@ Construction management platform for project managers and clients.
 
 ## Current status
 
-- Current phase: `Phase 1 - Foundation and Access Control`
-- Overall status: `Project scaffold complete, MVP features not started`
+- Current phase: `Phase 2 - Core Project Operations`
+- Overall status: `Phase 1 implemented, connected to Supabase, and validated against live PM/client access flow`
 - Rule: update this README whenever a phase is completed or the roadmap changes
 
 ## Tech stack
@@ -18,40 +18,54 @@ Construction management platform for project managers and clients.
 ## What exists right now
 
 - Marketing/overview page
-- PM dashboard stub
-- Client portal stub
-- Shared UI shell and styling
-- Supabase client helper
+- Auth flow for PM and client accounts
+- Protected `/app` route tree
+- PM/client role-aware dashboard
+- Project creation and client assignment flow
+- Supabase SSR auth helpers
+- Phase 1 SQL schema and RLS migrations
+- Live Supabase project connected and validated
 
 ## Phased roadmap
 
 ### Phase 1 - Foundation and Access Control
 
+Status: `Complete`
+
 Goal: turn the static shell into a real authenticated app with role separation and project ownership.
 
 Tasks in build order:
 
-1. Define the Supabase data model.
+1. [x] Define the Supabase data model.
    - Create `organizations`, `profiles`, `projects`, `project_members`, and `milestones`.
    - Lock roles to `pm` and `client`.
    - Associate every user and project to an organization.
-2. Set up authentication flow.
+2. [x] Set up authentication flow.
    - Build sign-up, sign-in, and sign-out.
    - Bootstrap the user profile on first login.
    - Redirect authenticated users into the app.
-3. Enforce authorization and row-level security.
+3. [x] Enforce authorization and row-level security.
    - PM can manage projects in their organization.
    - Client can only read assigned projects.
    - Default-deny access unless project membership exists.
-4. Create the authenticated app shell and route structure.
+4. [x] Create the authenticated app shell and route structure.
    - Move from demo routes to real app routes like `/app`, `/app/projects`, and `/app/projects/[projectId]`.
    - Render PM and client views from the same protected app tree.
-5. Build project creation and assignment.
+5. [x] Build project creation and assignment.
    - PM can create a project with core metadata.
    - PM can assign one or more clients to the project.
-6. Build the first real dashboard.
+6. [x] Build the first real dashboard.
    - PM dashboard shows active projects and recent activity.
    - Client dashboard shows assigned projects and published updates.
+
+Completed validation:
+
+- [x] Applied `0001_phase1_foundation.sql` to the live Supabase project
+- [x] Applied `0002_phase1_policy_fix.sql` to fix recursive membership policy logic
+- [x] Verified live PM account creation and organization bootstrap
+- [x] Verified live client account creation and organization attachment
+- [x] Verified PM project creation and client assignment
+- [x] Verified client can only see assigned projects
 
 Definition of done:
 
@@ -146,8 +160,11 @@ Open `http://localhost:3000`.
 ## Current routes
 
 - `/` marketing and product overview
-- `/pm` project manager dashboard stub
-- `/client` client portal stub
+- `/auth` sign in and sign up
+- `/app` authenticated dashboard
+- `/app/projects` project list and creation
+- `/app/projects/[projectId]` protected project detail
+- `/pm` and `/client` redirect into `/app`
 
 ## Environment
 
@@ -155,3 +172,18 @@ Create `.env.local` when you are ready to connect Supabase:
 
 - `NEXT_PUBLIC_SUPABASE_URL=your-project-url`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key`
+
+## Supabase setup
+
+Run the SQL in:
+
+- `supabase/migrations/0001_phase1_foundation.sql`
+- `supabase/migrations/0002_phase1_policy_fix.sql`
+
+These migrations create and fix:
+
+- organizations, profiles, projects, project_members, and milestones
+- role/status enums
+- profile bootstrap trigger on `auth.users`
+- row-level security policies for PM/client access control
+- follow-up policy fix for project membership and client project visibility
