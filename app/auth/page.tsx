@@ -38,20 +38,17 @@ export default async function AuthPage({
   return (
     <main className="landing-page">
       <BrandHeader />
-      <section className="hero-panel">
-        <div className="hero-copy">
-          <p className="eyebrow">Phase 3 onboarding</p>
-          <h1>
-            {inviteUsable
-              ? `Join ${invite.organization_name} and access ${invite.project_name}.`
-              : "Sign in or create your organization workspace."}
-          </h1>
-          <p className="hero-text">
-            {inviteUsable
-              ? `This invite is reserved for ${invite.email}. Create the client login with that email and you'll be added to the project automatically.`
-              : "Project managers create the organization and first project. Clients can sign up with an invite link or the organization slug already assigned to them."}
-          </p>
-        </div>
+      <section className="auth-intro">
+        <h1>
+          {inviteUsable
+            ? `Join ${invite.organization_name}`
+            : "Sign in or create your workspace."}
+        </h1>
+        <p className="hero-text">
+          {inviteUsable
+            ? `This invite is reserved for ${invite.email}. Create the client login with that email and you will be added to ${invite.project_name} automatically.`
+            : "Project managers create the organization and first project. Clients sign up with an invite link or the organization slug they were given."}
+        </p>
       </section>
       <AuthForms
         signInAction={signInAction}

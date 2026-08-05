@@ -1,7 +1,10 @@
 # Design Audit - My Star Contractor
 
 Audit performed against the `design-taste-frontend` redesign protocol (Section 11.B: audit before touching).
-No product code was changed. This document is the deliverable.
+
+**Status: findings 1 through 22 have been remediated.** See [Remediation](#remediation) at the
+end for what changed and what is still outstanding. The findings below are kept as written at
+audit time, as the record of what the site looked like before.
 
 ## Design read
 
@@ -199,3 +202,73 @@ Per the decision tree, the marketing IA and copy are sound, so this is **targete
 6. **Then, and only then, motion.** Scroll reveals and entry transitions, gated behind `prefers-reduced-motion`.
 
 Steps 1 through 3 are low-risk and touch few files. Step 4 is the one that needs real design thinking about how a PM actually moves through a job.
+
+---
+
+## Remediation
+
+All 22 findings above were addressed. Verified with `tsc --noEmit`, `eslint`, `next build`, and
+browser screenshots in both colour schemes at 1440px and 390px.
+
+### Design system
+
+The palette moved from warm cream / clay / espresso to a **cool graphite base with one saturated
+signal-orange accent** (`#c2410c` light, `#fb7f3f` dark). The base going cool is what removes the
+artisan reading; the accent keeps the brand's existing orange equity, so this is a re-base rather
+than a brand reset.
+
+A **radius scale is now documented and enforced** at the top of `globals.css`: 10px controls,
+14px cards, 18px panels, 999px pills. The six ad-hoc radii are gone.
+
+**Dark mode now exists**, via `prefers-color-scheme` over semantic tokens. Every colour pair was
+measured: the lowest contrast on the landing page is 5.65:1 light and 6.40:1 dark, against a
+4.5:1 AA requirement.
+
+`Literata` was dropped. `JetBrains Mono` replaces it for the numeric register (percentages,
+counts, file sizes, dates), which is the right register for operations software and gives
+tabular figures. `Space Grotesk` stays as the display face.
+
+### Measured outcomes
+
+| | Before | After |
+|---|---|---|
+| Eyebrows across the codebase | 40 | 5 |
+| Eyebrows on the project workspace | 18 | 1 (conditional error label) |
+| `autoComplete` attributes | 0 | 10 |
+| `prefers-reduced-motion` blocks | 0 | 2 |
+| `prefers-color-scheme` support | none | full |
+| Designed focus states | 0 | all interactive surfaces |
+| `backdrop-filter` on large surfaces | 3 | 0 |
+| Em-dashes | 0 | 0 |
+| Landing page first-load JS | 5.33 kB | 165 B |
+
+### Notable decisions
+
+**The project workspace was restructured** into seven anchored sections (Overview, Milestones,
+Files, Activity, Updates, Messages, Access) behind a sticky rail. Worth recording: a
+`position: sticky` element that is a *grid item* only sticks within its own row, so the workspace
+uses block flow. Verified by scrolling 1400px and asserting the rail sits at y=0.
+
+**Motion is deliberately transform-only.** The section reveal uses native
+`animation-timeline: view()`, so there is no JS, no scroll listener, and no bundle cost on a
+product that has no animation dependency. It does not animate opacity: a browser that supports
+the timeline but never advances it would otherwise render a section invisible, which on the only
+indexable page of the site is a much worse outcome than a 14px offset.
+
+**Form errors are announced but not yet inline.** The error panel moved above the forms and
+gained `role="alert"`, so it is announced and seen. True per-field inline errors need
+`signInAction` / `signUpAction` to return field-level state instead of redirecting with
+`?error=`, which changes their signatures. That is the one finding (#11) only partly closed.
+
+### Outstanding
+
+- **Photography.** The environment's network policy blocks all external image hosts, so remote
+  placeholders could not be verified and were not shipped. The two marketing slots hold their
+  exact final dimensions, so dropping real photos in causes no layout shift:
+  - Hero, 4:3 landscape, wide shot of an active job site
+  - Platform section, portrait, project manager on site
+
+  Real job photography will beat stock here, and the product already collects it.
+- **Inline field-level form errors**, per finding #11 above.
+- **Favicon and OG image.** `metadataBase`, Open Graph, Twitter card, and robots directives are
+  now set in `app/layout.tsx`, but there is still no icon or share image asset.

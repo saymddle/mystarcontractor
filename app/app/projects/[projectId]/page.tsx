@@ -35,6 +35,16 @@ const documentCategories: Array<DocumentCategory> = [
   "other"
 ];
 
+const sections = [
+  { id: "overview", label: "Overview" },
+  { id: "milestones", label: "Milestones" },
+  { id: "files", label: "Files" },
+  { id: "activity", label: "Activity" },
+  { id: "updates", label: "Updates" },
+  { id: "messages", label: "Messages" },
+  { id: "access", label: "Access" }
+];
+
 function formatDate(value: string | null) {
   if (!value) {
     return "Not scheduled";
@@ -149,9 +159,10 @@ export default async function ProjectDetailPage({
   }
 
   const progress = getProgressSummary(data.milestones);
+  const isPm = profile.role === "pm";
 
   return (
-    <section className="dashboard-stack">
+    <div className="workspace">
       <RealtimeRefresh
         channels={[
           { schema: "public", table: "project_messages", filter: `project_id=eq.${data.project.id}` },
@@ -159,95 +170,74 @@ export default async function ProjectDetailPage({
           { schema: "public", table: "notifications", filter: `user_id=eq.${profile.id}` }
         ]}
       />
+
+      {query.error || query.message ? (
+        <article
+          className={`panel ${query.error ? "panel--error" : ""}`}
+          role="alert"
+          aria-live="polite"
+        >
+          <p className="eyebrow">{query.error ? "Action failed" : "Status"}</p>
+          <p className="message-copy">{query.error ?? query.message}</p>
+        </article>
+      ) : null}
+
       <article className="panel">
-        <p className="eyebrow">Project detail</p>
         <h1>{data.project.name}</h1>
         <p className="hero-text">
-          {data.project.location || "Location not set"} •{" "}
+          {data.project.location || "Location not set"} ·{" "}
           {data.project.status.replace("_", " ")}
         </p>
       </article>
 
-      {query.error ? (
-        <article className="panel panel--error">
-          <p className="eyebrow">Action failed</p>
-          <p className="message-copy">{query.error}</p>
-        </article>
-      ) : null}
+      <nav className="section-rail" aria-label="Project sections">
+        {sections.map((section) => (
+          <a key={section.id} href={`#${section.id}`}>
+            {section.label}
+          </a>
+        ))}
+      </nav>
 
-      {query.message ? (
-        <article className="panel">
-          <p className="eyebrow">Status</p>
-          <p className="message-copy">{query.message}</p>
-        </article>
-      ) : null}
+      {/* ---------------------------------------------------------------- */}
+      <section className="workspace-section" id="overview">
+        <h2 className="section-title">Overview</h2>
 
-      <section className="stats-row">
-        <article className="stat-card">
-          <span>Milestones</span>
-          <strong>{data.milestones.length}</strong>
-        </article>
-        <article className="stat-card">
-          <span>Average completion</span>
-          <strong>{progress}%</strong>
-        </article>
-        <article className="stat-card">
-          <span>Target end</span>
-          <strong>{formatDate(data.project.target_end_date)}</strong>
-        </article>
-        <article className="stat-card">
-          <span>Documents</span>
-          <strong>{data.documents.length}</strong>
-        </article>
-        <article className="stat-card">
-          <span>Photos</span>
-          <strong>{data.photos.length}</strong>
-        </article>
-        <article className="stat-card">
-          <span>Activity events</span>
-          <strong>{data.activity.length}</strong>
-        </article>
-      </section>
-
-      <section className="content-grid">
-        <article className="panel">
-          <div className="panel__heading">
-            <p className="eyebrow">Project membership</p>
-            <h2>Current access list</h2>
-          </div>
-          <ul className="list">
-            {data.project.members.map((member) => (
-              <li key={member.id}>
-                <strong>{member.fullName}</strong>
-                <span>{member.role}</span>
-              </li>
-            ))}
-          </ul>
-          {profile.role === "pm" && data.invites.length > 0 ? (
-            <div className="invite-list">
-              <p className="eyebrow">Pending invites</p>
-              {data.invites.map((invite) => (
-                <div key={invite.id} className="invite-card">
-                  <strong>{invite.email}</strong>
-                  <span>
-                    {invite.status} until {formatDate(invite.expires_at)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </article>
+        <div className="stats-row">
+          <article className="stat-card">
+            <span>Milestones</span>
+            <strong>{data.milestones.length}</strong>
+          </article>
+          <article className="stat-card">
+            <span>Average completion</span>
+            <strong>{progress}%</strong>
+          </article>
+          <article className="stat-card">
+            <span>Target end</span>
+            <strong>{formatDate(data.project.target_end_date)}</strong>
+          </article>
+          <article className="stat-card">
+            <span>Documents</span>
+            <strong>{data.documents.length}</strong>
+          </article>
+          <article className="stat-card">
+            <span>Photos</span>
+            <strong>{data.photos.length}</strong>
+          </article>
+          <article className="stat-card">
+            <span>Activity events</span>
+            <strong>{data.activity.length}</strong>
+          </article>
+        </div>
 
         <article className="panel">
           <div className="panel__heading">
-            <p className="eyebrow">Project overview</p>
             <h2>Progress summary</h2>
+            <p>
+              Average milestone completion is {progress}%. Start{" "}
+              {formatDate(data.project.start_date)}, target end{" "}
+              {formatDate(data.project.target_end_date)}.
+            </p>
           </div>
-          <p className="hero-text">
-            Average milestone completion is {progress}%. Start date{" "}
-            {formatDate(data.project.start_date)}. Target end{" "}
-            {formatDate(data.project.target_end_date)}.
-          </p>
           <div className="progress-bar" aria-hidden="true">
             <span style={{ width: `${progress}%` }} />
           </div>
@@ -264,38 +254,16 @@ export default async function ProjectDetailPage({
         </article>
       </section>
 
-      {profile.role === "pm" ? (
-        <section className="content-grid">
-          <article className="panel">
-            <p className="eyebrow">Assign client</p>
-            <h2>Add another client account to this project</h2>
-            <form action={assignClientAction} className="form-grid">
-              <input type="hidden" name="projectId" value={data.project.id} />
-              <label className="field">
-                <span>Client email</span>
-                <input type="email" name="clientEmail" required />
-              </label>
-              <button type="submit" className="button button--solid">
-                Assign client
-              </button>
-            </form>
-            <div className="panel__divider" />
-            <p className="eyebrow">Invite new client</p>
-            <form action={createClientInviteAction} className="form-grid">
-              <input type="hidden" name="projectId" value={data.project.id} />
-              <label className="field">
-                <span>Email</span>
-                <input type="email" name="email" required />
-              </label>
-              <button type="submit" className="button button--ghost">
-                Send invite
-              </button>
-            </form>
-          </article>
+      {/* ---------------------------------------------------------------- */}
+      <section className="workspace-section" id="milestones">
+        <h2 className="section-title">Milestones</h2>
 
+        {isPm ? (
           <article className="panel">
-            <p className="eyebrow">Add milestone</p>
-            <h2>Create the next project stage</h2>
+            <div className="panel__heading">
+              <h2>Add a milestone</h2>
+              <p>Overall project completion is derived from these stages.</p>
+            </div>
             <form action={createMilestoneAction} className="form-grid">
               <input type="hidden" name="projectId" value={data.project.id} />
               <label className="field">
@@ -328,274 +296,326 @@ export default async function ProjectDetailPage({
               </button>
             </form>
           </article>
-        </section>
-      ) : null}
+        ) : null}
 
-      <article className="panel">
-        <div className="panel__heading">
-          <p className="eyebrow">Milestones</p>
-          <h2>Track the build stage by stage</h2>
-        </div>
-        {data.milestones.length === 0 ? (
-          <p className="hero-text">No milestones have been created for this project yet.</p>
-        ) : profile.role === "pm" ? (
-          <div className="editor-list">
-            {data.milestones.map((milestone) => (
-              <MilestoneEditor
-                key={milestone.id}
-                projectId={data.project.id}
-                milestone={milestone}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="milestone-list">
-            {data.milestones.map((milestone) => (
-              <div key={milestone.id} className="milestone-item">
-                <div>
-                  <strong>{milestone.title}</strong>
-                  <span>{milestone.status.replace("_", " ")}</span>
-                </div>
-                <strong>{milestone.percent_complete}%</strong>
-              </div>
-            ))}
-          </div>
-        )}
-      </article>
-
-      <article className="panel">
-        <div className="panel__heading">
-          <p className="eyebrow">Filters</p>
-          <h2>Search documents, photos, and activity</h2>
-        </div>
-        <form className="form-grid" method="get">
-          <label className="field">
-            <span>Search</span>
-            <input type="text" name="q" defaultValue={query.q ?? ""} />
-          </label>
-          <label className="field">
-            <span>Visibility</span>
-            <select name="visibility" defaultValue={query.visibility ?? "all"}>
-              <option value="all">All visibility</option>
-              {visibilityOptions.map((value) => (
-                <option key={value} value={value}>
-                  {value.replace("_", " ")}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            <span>Document category</span>
-            <select name="category" defaultValue={query.category ?? "all"}>
-              <option value="all">All categories</option>
-              {documentCategories.map((value) => (
-                <option key={value} value={value}>
-                  {value.replace("_", " ")}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button type="submit" className="button button--ghost">
-            Apply filters
-          </button>
-        </form>
-      </article>
-
-      {profile.role === "pm" ? (
-        <section className="content-grid">
-          <article className="panel">
-            <p className="eyebrow">Upload document</p>
-            <h2>Add contracts, permits, plans, and change orders</h2>
-            <form action={uploadDocumentAction} className="form-grid">
-              <input type="hidden" name="projectId" value={data.project.id} />
-              <label className="field">
-                <span>Title</span>
-                <input type="text" name="title" required />
-              </label>
-              <label className="field">
-                <span>Category</span>
-                <select name="category" defaultValue="other">
-                  {documentCategories.map((value) => (
-                    <option key={value} value={value}>
-                      {value.replace("_", " ")}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
-                <span>Visibility</span>
-                <select name="visibility" defaultValue="internal">
-                  {visibilityOptions.map((value) => (
-                    <option key={value} value={value}>
-                      {value.replace("_", " ")}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
-                <span>Attach to milestone</span>
-                <select name="milestoneId" defaultValue="">
-                  <option value="">No milestone</option>
-                  {data.milestones.map((milestone) => (
-                    <option key={milestone.id} value={milestone.id}>
-                      {milestone.title}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field field--full">
-                <span>File</span>
-                <input type="file" name="file" required />
-              </label>
-              <button type="submit" className="button button--solid">
-                Upload document
-              </button>
-            </form>
-          </article>
-
-          <article className="panel">
-            <p className="eyebrow">Upload photo</p>
-            <h2>Add progress photos with area and visibility control</h2>
-            <form action={uploadPhotoAction} className="form-grid">
-              <input type="hidden" name="projectId" value={data.project.id} />
-              <label className="field">
-                <span>Caption</span>
-                <input type="text" name="caption" />
-              </label>
-              <label className="field">
-                <span>Area</span>
-                <input type="text" name="area" placeholder="Kitchen, exterior, level 2" />
-              </label>
-              <label className="field">
-                <span>Visibility</span>
-                <select name="visibility" defaultValue="internal">
-                  {visibilityOptions.map((value) => (
-                    <option key={value} value={value}>
-                      {value.replace("_", " ")}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
-                <span>Attach to milestone</span>
-                <select name="milestoneId" defaultValue="">
-                  <option value="">No milestone</option>
-                  {data.milestones.map((milestone) => (
-                    <option key={milestone.id} value={milestone.id}>
-                      {milestone.title}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field field--full">
-                <span>Image</span>
-                <input type="file" name="file" accept="image/*" required />
-              </label>
-              <button type="submit" className="button button--solid">
-                Upload photo
-              </button>
-            </form>
-          </article>
-        </section>
-      ) : null}
-
-      <section className="content-grid">
         <article className="panel">
           <div className="panel__heading">
-            <p className="eyebrow">Documents</p>
-            <h2>Project file library</h2>
+            <h2>Build stages</h2>
           </div>
-          {data.documents.length === 0 ? (
-            <p className="hero-text">No documents match the current filters.</p>
-          ) : (
-            <div className="asset-list">
-              {data.documents.map((document) => (
-                <a
-                  key={document.id}
-                  href={document.file_url ?? "#"}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="asset-card"
-                >
-                  <div className="asset-card__header">
-                    <strong>{document.title}</strong>
-                    <span className="status-pill">
-                      {document.visibility.replace("_", " ")}
-                    </span>
-                  </div>
-                  <p>{document.category.replace("_", " ")}</p>
-                  <div className="project-card__meta">
-                    <span>{document.file_name}</span>
-                    <span>{formatBytes(document.file_size)}</span>
-                  </div>
-                </a>
+          {data.milestones.length === 0 ? (
+            <div className="empty-state">
+              <p>
+                {isPm
+                  ? "No milestones yet. Add the first stage above to start tracking progress."
+                  : "Your project manager has not added any milestones yet."}
+              </p>
+            </div>
+          ) : isPm ? (
+            <div className="editor-list">
+              {data.milestones.map((milestone) => (
+                <MilestoneEditor
+                  key={milestone.id}
+                  projectId={data.project.id}
+                  milestone={milestone}
+                />
               ))}
             </div>
-          )}
-        </article>
-
-        <article className="panel">
-          <div className="panel__heading">
-            <p className="eyebrow">Photos</p>
-            <h2>Visual progress log</h2>
-          </div>
-          {data.photos.length === 0 ? (
-            <p className="hero-text">No photos match the current filters.</p>
           ) : (
-            <div className="photo-grid">
-              {data.photos.map((photo) => (
-                <a
-                  key={photo.id}
-                  href={photo.file_url ?? "#"}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="photo-card"
-                >
-                  {photo.file_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={photo.file_url} alt={photo.caption ?? photo.file_name} />
-                  ) : null}
-                  <div className="photo-card__body">
-                    <strong>{photo.caption || photo.file_name}</strong>
-                    <span>{photo.area || "Area not set"}</span>
-                    <span>{photo.visibility.replace("_", " ")}</span>
+            <div className="milestone-list">
+              {data.milestones.map((milestone) => (
+                <div key={milestone.id} className="milestone-item">
+                  <div>
+                    <strong>{milestone.title}</strong>
+                    <span>{milestone.status.replace("_", " ")}</span>
                   </div>
-                </a>
+                  <strong>{milestone.percent_complete}%</strong>
+                </div>
               ))}
             </div>
           )}
         </article>
       </section>
 
-      <article className="panel">
-        <div className="panel__heading">
-          <p className="eyebrow">Activity</p>
-          <h2>Unified project timeline</h2>
-        </div>
-        {data.activity.length === 0 ? (
-          <p className="hero-text">No activity matches the current filters.</p>
-        ) : (
-          <ul className="list">
-            {data.activity.map((event) => (
-              <li key={event.id}>
-                <div className="activity-copy">
-                  <strong>{event.title}</strong>
-                  <span>{event.detail || event.event_type.replace(/_/g, " ")}</span>
-                </div>
-                <small>{formatDate(event.created_at)}</small>
-              </li>
-            ))}
-          </ul>
-        )}
-      </article>
+      {/* ---------------------------------------------------------------- */}
+      <section className="workspace-section" id="files">
+        <h2 className="section-title">Files</h2>
 
-      <section className="content-grid">
         <article className="panel">
           <div className="panel__heading">
-            <p className="eyebrow">Project updates</p>
-            <h2>Published updates and internal notes</h2>
+            <h2>Search and filter</h2>
+            <p>Applies to documents, photos, and the activity timeline.</p>
           </div>
-          {profile.role === "pm" ? (
+          <form className="toolbar" method="get">
+            <label className="field">
+              <span>Search</span>
+              <input
+                type="text"
+                name="q"
+                defaultValue={query.q ?? ""}
+                placeholder="Title or caption"
+              />
+            </label>
+            <label className="field">
+              <span>Visibility</span>
+              <select name="visibility" defaultValue={query.visibility ?? "all"}>
+                <option value="all">All visibility</option>
+                {visibilityOptions.map((value) => (
+                  <option key={value} value={value}>
+                    {value.replace("_", " ")}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>Document category</span>
+              <select name="category" defaultValue={query.category ?? "all"}>
+                <option value="all">All categories</option>
+                {documentCategories.map((value) => (
+                  <option key={value} value={value}>
+                    {value.replace("_", " ")}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button type="submit" className="button button--ghost">
+              Apply
+            </button>
+          </form>
+        </article>
+
+        {isPm ? (
+          <div className="content-grid">
+            <article className="panel">
+              <div className="panel__heading">
+                <h2>Upload a document</h2>
+                <p>Contracts, permits, plans, and change orders.</p>
+              </div>
+              <form action={uploadDocumentAction} className="form-grid">
+                <input type="hidden" name="projectId" value={data.project.id} />
+                <label className="field">
+                  <span>Title</span>
+                  <input type="text" name="title" required />
+                </label>
+                <label className="field">
+                  <span>Category</span>
+                  <select name="category" defaultValue="other">
+                    {documentCategories.map((value) => (
+                      <option key={value} value={value}>
+                        {value.replace("_", " ")}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Visibility</span>
+                  <select name="visibility" defaultValue="internal">
+                    {visibilityOptions.map((value) => (
+                      <option key={value} value={value}>
+                        {value.replace("_", " ")}
+                      </option>
+                    ))}
+                  </select>
+                  <small className="field__hint">
+                    Internal stays hidden from the client.
+                  </small>
+                </label>
+                <label className="field">
+                  <span>Attach to milestone</span>
+                  <select name="milestoneId" defaultValue="">
+                    <option value="">No milestone</option>
+                    {data.milestones.map((milestone) => (
+                      <option key={milestone.id} value={milestone.id}>
+                        {milestone.title}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field field--full">
+                  <span>File</span>
+                  <input type="file" name="file" required />
+                </label>
+                <button type="submit" className="button button--solid">
+                  Upload document
+                </button>
+              </form>
+            </article>
+
+            <article className="panel">
+              <div className="panel__heading">
+                <h2>Upload a photo</h2>
+                <p>Progress photos with area and visibility control.</p>
+              </div>
+              <form action={uploadPhotoAction} className="form-grid">
+                <input type="hidden" name="projectId" value={data.project.id} />
+                <label className="field">
+                  <span>Caption</span>
+                  <input type="text" name="caption" />
+                </label>
+                <label className="field">
+                  <span>Area</span>
+                  <input
+                    type="text"
+                    name="area"
+                    placeholder="Kitchen, exterior, level 2"
+                  />
+                </label>
+                <label className="field">
+                  <span>Visibility</span>
+                  <select name="visibility" defaultValue="internal">
+                    {visibilityOptions.map((value) => (
+                      <option key={value} value={value}>
+                        {value.replace("_", " ")}
+                      </option>
+                    ))}
+                  </select>
+                  <small className="field__hint">
+                    Internal stays hidden from the client.
+                  </small>
+                </label>
+                <label className="field">
+                  <span>Attach to milestone</span>
+                  <select name="milestoneId" defaultValue="">
+                    <option value="">No milestone</option>
+                    {data.milestones.map((milestone) => (
+                      <option key={milestone.id} value={milestone.id}>
+                        {milestone.title}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field field--full">
+                  <span>Image</span>
+                  <input type="file" name="file" accept="image/*" required />
+                </label>
+                <button type="submit" className="button button--solid">
+                  Upload photo
+                </button>
+              </form>
+            </article>
+          </div>
+        ) : null}
+
+        <div className="content-grid">
+          <article className="panel">
+            <div className="panel__heading">
+              <h2>Documents</h2>
+            </div>
+            {data.documents.length === 0 ? (
+              <div className="empty-state">
+                <p>No documents match the current filters.</p>
+              </div>
+            ) : (
+              <div className="asset-list">
+                {data.documents.map((document) => (
+                  <a
+                    key={document.id}
+                    href={document.file_url ?? "#"}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="asset-card"
+                  >
+                    <div className="asset-card__header">
+                      <strong>{document.title}</strong>
+                      <span className="status-pill">
+                        {document.visibility.replace("_", " ")}
+                      </span>
+                    </div>
+                    <p>{document.category.replace("_", " ")}</p>
+                    <div className="project-card__meta">
+                      <span>{document.file_name}</span>
+                      <span>{formatBytes(document.file_size)}</span>
+                    </div>
+                  </a>
+                ))}
+              </div>
+            )}
+          </article>
+
+          <article className="panel">
+            <div className="panel__heading">
+              <h2>Photos</h2>
+            </div>
+            {data.photos.length === 0 ? (
+              <div className="empty-state">
+                <p>No photos match the current filters.</p>
+              </div>
+            ) : (
+              <div className="photo-grid">
+                {data.photos.map((photo) => (
+                  <a
+                    key={photo.id}
+                    href={photo.file_url ?? "#"}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="photo-card"
+                  >
+                    {photo.file_url ? (
+                      // Supabase storage URLs are not a fixed remote pattern,
+                      // so next/image optimization is skipped here on purpose.
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={photo.file_url}
+                        alt={photo.caption ?? photo.file_name}
+                        width={480}
+                        height={200}
+                        loading="lazy"
+                      />
+                    ) : null}
+                    <div className="photo-card__body">
+                      <strong>{photo.caption || photo.file_name}</strong>
+                      <span>{photo.area || "Area not set"}</span>
+                      <span>{photo.visibility.replace("_", " ")}</span>
+                    </div>
+                  </a>
+                ))}
+              </div>
+            )}
+          </article>
+        </div>
+      </section>
+
+      {/* ---------------------------------------------------------------- */}
+      <section className="workspace-section" id="activity">
+        <h2 className="section-title">Activity</h2>
+        <article className="panel">
+          <div className="panel__heading">
+            <h2>Project timeline</h2>
+          </div>
+          {data.activity.length === 0 ? (
+            <div className="empty-state">
+              <p>No activity matches the current filters.</p>
+            </div>
+          ) : (
+            <ul className="list">
+              {data.activity.map((event) => (
+                <li key={event.id}>
+                  <div className="activity-copy">
+                    <strong>{event.title}</strong>
+                    <span>
+                      {event.detail || event.event_type.replace(/_/g, " ")}
+                    </span>
+                  </div>
+                  <small>{formatDate(event.created_at)}</small>
+                </li>
+              ))}
+            </ul>
+          )}
+        </article>
+      </section>
+
+      {/* ---------------------------------------------------------------- */}
+      <section className="workspace-section" id="updates">
+        <h2 className="section-title">Updates</h2>
+
+        {isPm ? (
+          <article className="panel">
+            <div className="panel__heading">
+              <h2>Publish an update</h2>
+              <p>
+                Client-visible updates appear in the client portal and the
+                activity feed. Internal notes stay with your team.
+              </p>
+            </div>
             <form action={publishUpdateAction} className="form-grid">
               <input type="hidden" name="projectId" value={data.project.id} />
               <label className="field">
@@ -631,9 +651,17 @@ export default async function ProjectDetailPage({
                 Publish update
               </button>
             </form>
-          ) : null}
+          </article>
+        ) : null}
+
+        <article className="panel">
+          <div className="panel__heading">
+            <h2>Published updates</h2>
+          </div>
           {data.updates.length === 0 ? (
-            <p className="hero-text">No project updates have been published yet.</p>
+            <div className="empty-state">
+              <p>No project updates have been published yet.</p>
+            </div>
           ) : (
             <div className="editor-list">
               {data.updates.map((update) => (
@@ -651,14 +679,19 @@ export default async function ProjectDetailPage({
             </div>
           )}
         </article>
+      </section>
 
+      {/* ---------------------------------------------------------------- */}
+      <section className="workspace-section" id="messages">
+        <h2 className="section-title">Messages</h2>
         <article className="panel">
           <div className="panel__heading">
-            <p className="eyebrow">Messages</p>
             <h2>Project conversation</h2>
           </div>
           {data.messages.length === 0 ? (
-            <p className="hero-text">No messages in this thread yet.</p>
+            <div className="empty-state">
+              <p>No messages in this thread yet. Send the first one below.</p>
+            </div>
           ) : (
             <div className="chat-thread">
               {data.messages.map((message) => (
@@ -686,19 +719,107 @@ export default async function ProjectDetailPage({
               Send message
             </button>
           </form>
-          <form action={markProjectMessagesReadAction}>
-            <input type="hidden" name="projectId" value={data.project.id} />
-            <button type="submit" className="button button--ghost">
-              Mark thread read
-            </button>
-          </form>
-          <form action={markNotificationsReadAction}>
-            <button type="submit" className="button button--ghost">
-              Mark notifications read
-            </button>
-          </form>
+          <div className="panel__divider" />
+          <div className="hero-actions">
+            <form action={markProjectMessagesReadAction}>
+              <input type="hidden" name="projectId" value={data.project.id} />
+              <button type="submit" className="button button--ghost">
+                Mark thread read
+              </button>
+            </form>
+            <form action={markNotificationsReadAction}>
+              <button type="submit" className="button button--ghost">
+                Mark notifications read
+              </button>
+            </form>
+          </div>
         </article>
       </section>
-    </section>
+
+      {/* ---------------------------------------------------------------- */}
+      <section className="workspace-section" id="access">
+        <h2 className="section-title">Access</h2>
+
+        <article className="panel">
+          <div className="panel__heading">
+            <h2>Who can see this project</h2>
+          </div>
+          <ul className="list">
+            {data.project.members.map((member) => (
+              <li key={member.id}>
+                <div>
+                  <strong>{member.fullName}</strong>
+                </div>
+                <span className="status-pill">
+                  {member.role === "pm" ? "Project manager" : "Client"}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {isPm && data.invites.length > 0 ? (
+            <>
+              <div className="panel__divider" />
+              <h2>Pending invites</h2>
+              <div className="invite-list">
+                {data.invites.map((invite) => (
+                  <div key={invite.id} className="invite-card">
+                    <strong>{invite.email}</strong>
+                    <span>
+                      {invite.status} until {formatDate(invite.expires_at)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : null}
+        </article>
+
+        {isPm ? (
+          <div className="content-grid">
+            <article className="panel">
+              <div className="panel__heading">
+                <h2>Assign an existing client</h2>
+                <p>The account must already exist in your organization.</p>
+              </div>
+              <form action={assignClientAction} className="form-stack">
+                <input type="hidden" name="projectId" value={data.project.id} />
+                <label className="field">
+                  <span>Client email</span>
+                  <input
+                    type="email"
+                    name="clientEmail"
+                    autoComplete="off"
+                    required
+                  />
+                </label>
+                <button type="submit" className="button button--solid">
+                  Assign client
+                </button>
+              </form>
+            </article>
+
+            <article className="panel">
+              <div className="panel__heading">
+                <h2>Invite a new client</h2>
+                <p>
+                  Sends a link that assigns project access as soon as they sign
+                  up.
+                </p>
+              </div>
+              <form action={createClientInviteAction} className="form-stack">
+                <input type="hidden" name="projectId" value={data.project.id} />
+                <label className="field">
+                  <span>Email</span>
+                  <input type="email" name="email" autoComplete="off" required />
+                </label>
+                <button type="submit" className="button button--ghost">
+                  Send invite
+                </button>
+              </form>
+            </article>
+          </div>
+        ) : null}
+      </section>
+    </div>
   );
 }

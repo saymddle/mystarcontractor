@@ -15,6 +15,23 @@ Construction management platform for project managers and clients.
 - Supabase
 - Vercel for deployment
 
+## Design system
+
+Tokens live at the top of `app/globals.css`. There is no CSS framework and no component library.
+
+- **Palette**: cool graphite base, one saturated signal-orange accent. Light and dark are both
+  first-class, driven by `prefers-color-scheme` over semantic tokens. Do not add a colour outside
+  the token set.
+- **Radius scale**: 10px controls, 14px cards, 18px panels, 999px pills. Nothing else.
+- **Type**: `Space Grotesk` for display and body, `JetBrains Mono` for the numeric register
+  (percentages, counts, file sizes, dates) via the `.num` class and its aliases.
+- **Motion**: hover and active transitions, plus a transform-only scroll reveal on marketing
+  sections using native `animation-timeline: view()`. Everything collapses under
+  `prefers-reduced-motion: reduce`. No animation library.
+
+`DESIGN_AUDIT.md` records the audit these came out of, including the reasoning behind each
+choice and what is still outstanding.
+
 ## What exists right now
 
 - Marketing/overview page

@@ -5,8 +5,10 @@ export function ProjectForm({
 }) {
   return (
     <article className="panel">
-      <p className="eyebrow">Create project</p>
-      <h2>Start a new job and assign the client immediately.</h2>
+      <div className="panel__heading">
+        <h2>Start a new job</h2>
+        <p>Assign a client now, or leave it blank and assign one later.</p>
+      </div>
       <form action={createProjectAction} className="form-grid">
         <label className="field">
           <span>Project name</span>
@@ -14,7 +16,7 @@ export function ProjectForm({
         </label>
         <label className="field">
           <span>Location</span>
-          <input type="text" name="location" />
+          <input type="text" name="location" autoComplete="address-level2" />
         </label>
         <label className="field">
           <span>Status</span>
@@ -35,11 +37,11 @@ export function ProjectForm({
         </label>
         <label className="field">
           <span>Client email</span>
-          <input
-            type="email"
-            name="clientEmail"
-            placeholder="Optional existing client account"
-          />
+          <input type="email" name="clientEmail" autoComplete="off" />
+          <small className="field__hint">
+            Must already have an account. Use Invite client on the project page
+            for someone new.
+          </small>
         </label>
         <button type="submit" className="button button--solid">
           Create project

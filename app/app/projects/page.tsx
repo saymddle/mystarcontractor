@@ -17,28 +17,24 @@ export default async function ProjectsPage({
 
   return (
     <section className="dashboard-stack">
+      {params.error || params.message ? (
+        <article
+          className={`panel ${params.error ? "panel--error" : ""}`}
+          role="alert"
+          aria-live="polite"
+        >
+          <p className="eyebrow">{params.error ? "Action failed" : "Status"}</p>
+          <p className="message-copy">{params.error ?? params.message}</p>
+        </article>
+      ) : null}
+
       <article className="panel">
-        <p className="eyebrow">Projects</p>
         <h1>
           {profile.role === "pm"
             ? "Create, assign, and control project access."
-            : "View the projects currently assigned to you."}
+            : "The projects currently assigned to you."}
         </h1>
       </article>
-
-      {params.error ? (
-        <article className="panel panel--error">
-          <p className="eyebrow">Action failed</p>
-          <p className="message-copy">{params.error}</p>
-        </article>
-      ) : null}
-
-      {params.message ? (
-        <article className="panel">
-          <p className="eyebrow">Status</p>
-          <p className="message-copy">{params.message}</p>
-        </article>
-      ) : null}
 
       {profile.role === "pm" ? (
         <ProjectForm createProjectAction={createProjectAction} />
@@ -49,7 +45,7 @@ export default async function ProjectsPage({
         emptyCopy={
           profile.role === "pm"
             ? "No projects exist yet for this organization."
-            : "Your PM has not assigned you to a project yet."
+            : "Your project manager has not assigned you to a project yet."
         }
       />
     </section>
