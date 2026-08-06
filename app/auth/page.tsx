@@ -50,11 +50,20 @@ export default async function AuthPage({
             : "Project managers create the organization and first project. Clients sign up with an invite link or the organization slug they were given."}
         </p>
       </section>
+      {/* Page-level only: these come from the email-confirmation callback,
+          not from a form submit. Form errors render inside AuthForms. */}
+      {params.error || params.message ? (
+        <article
+          className={`panel ${params.error ? "panel--error" : ""}`}
+          role="alert"
+        >
+          <p className="message-copy">{params.error ?? params.message}</p>
+        </article>
+      ) : null}
+
       <AuthForms
         signInAction={signInAction}
         signUpAction={signUpAction}
-        message={params.message}
-        error={params.error}
         invite={
           invite
             ? {

@@ -36,6 +36,8 @@
 
   --danger: #b91c1c;
   --danger-weak: rgba(185, 28, 28, 0.08);
+  --positive: #136c34;
+  --positive-weak: rgba(19, 108, 52, 0.08);
 
   --r-control: 10px;
   --r-card: 14px;
@@ -71,6 +73,8 @@
 
     --danger: #fca5a5;
     --danger-weak: rgba(248, 113, 113, 0.12);
+    --positive: #4ade80;
+    --positive-weak: rgba(74, 222, 128, 0.12);
 
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.34);
@@ -694,7 +698,10 @@ h2 {
   min-width: 0;
 }
 
-.field > span {
+/* `span` is the older markup (label wrapping its control), `label` is the
+   Field component's explicit htmlFor pairing. Both render identically. */
+.field > span,
+.field > label {
   font-size: 0.88rem;
   font-weight: 500;
   color: var(--ink);
@@ -704,6 +711,61 @@ h2 {
   font-size: 0.82rem;
   color: var(--muted);
   line-height: 1.45;
+}
+
+.field__error {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--danger);
+  line-height: 1.45;
+}
+
+/* Doubled class to outrank the `.field input` base rule below, which would
+   otherwise win on source order and keep the neutral border. */
+.field.field--invalid input,
+.field.field--invalid select,
+.field.field--invalid textarea {
+  border-color: var(--danger);
+}
+
+.field.field--invalid input:focus-visible,
+.field.field--invalid select:focus-visible,
+.field.field--invalid textarea:focus-visible {
+  outline-color: var(--danger);
+}
+
+/* Form-level alert. Sits inside the form, above the fields, for failures that
+   belong to no single input (bad credentials, expired invite, upstream error). */
+.inline-alert {
+  padding: 12px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-control);
+  background: var(--surface-2);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.inline-alert--error {
+  border-color: var(--danger);
+  background: var(--danger-weak);
+  color: var(--danger);
+}
+
+/* Success must not read as the accent, which sits next to red in this palette
+   and would be mistaken for the error state at a glance. */
+.inline-alert--success {
+  border-color: var(--positive);
+  background: var(--positive-weak);
+  color: var(--positive);
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.button:disabled:hover {
+  transform: none;
 }
 
 .field input,

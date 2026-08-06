@@ -6,28 +6,12 @@ import { createProjectAction } from "@/app/app/actions";
 
 export const dynamic = "force-dynamic";
 
-export default async function ProjectsPage({
-  searchParams
-}: {
-  searchParams: Promise<{ error?: string; message?: string }>;
-}) {
+export default async function ProjectsPage() {
   const { profile } = await requireUserContext();
   const projects = await getProjectsForProfile(profile);
-  const params = await searchParams;
 
   return (
     <section className="dashboard-stack">
-      {params.error || params.message ? (
-        <article
-          className={`panel ${params.error ? "panel--error" : ""}`}
-          role="alert"
-          aria-live="polite"
-        >
-          <p className="eyebrow">{params.error ? "Action failed" : "Status"}</p>
-          <p className="message-copy">{params.error ?? params.message}</p>
-        </article>
-      ) : null}
-
       <article className="panel">
         <h1>
           {profile.role === "pm"

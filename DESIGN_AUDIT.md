@@ -255,10 +255,55 @@ product that has no animation dependency. It does not animate opacity: a browser
 the timeline but never advances it would otherwise render a section invisible, which on the only
 indexable page of the site is a much worse outcome than a 14px offset.
 
-**Form errors are announced but not yet inline.** The error panel moved above the forms and
-gained `role="alert"`, so it is announced and seen. True per-field inline errors need
-`signInAction` / `signUpAction` to return field-level state instead of redirecting with
-`?error=`, which changes their signatures. That is the one finding (#11) only partly closed.
+**Form errors are inline, per field.** See [Inline form errors](#inline-form-errors) below.
+
+## Inline form errors
+
+Finding #11 is now fully closed. Every form-bearing action returns state instead of redirecting
+with `?error=`, and every validation message renders under the input that caused it.
+
+### The rule that decides where a message goes
+
+Not every failure belongs on a field, and forcing them all inline would be worse than the banner
+it replaced. The split, encoded in `lib/form-state.ts`:
+
+- **`fieldErrors`** are problems the user fixes in a specific input. They render under that
+  input, turn its border red, and set `aria-invalid`. "Give the milestone a title.", "Documents
+  must be 25 MB or smaller.", "This client already has access to the project."
+- **`message`** is everything with no field to attach it to: authorization, storage, upstream
+  failures, an expired invite. It renders as an alert inside the form.
+- **Authorization redirects stay redirects.** `requirePmProfile()` still sends a non-PM to
+  `/app?error=`, and the email-confirmation callback still redirects to `/auth?error=`. Neither
+  originates from a form submit, so neither belongs in form state.
+
+One deliberate exception: a failed sign-in attaches to no field. Supabase returns the same error
+for a wrong email and a wrong password so accounts cannot be enumerated, and putting that on the
+email input would imply the password was fine. It stays form-level.
+
+### What changed
+
+- Nine actions converted to `(previousState, formData) => Promise<FormState>`:
+  `signIn`, `signUp`, `createProject`, `assignClient`, `createClientInvite`, `createMilestone`,
+  `updateMilestone`, `uploadDocument`, `uploadPhoto`, `sendMessage`, `publishUpdate`.
+- Forms that stay on the page now `revalidatePath` and return a success message, so submitting
+  no longer leaves `?message=...` in the URL.
+- New `components/field.tsx` owns the label, hint, error, and the ids that tie them together, so
+  the aria wiring is done once rather than per form.
+- Submit buttons disable and change label while pending.
+- Values are echoed back and bound through `defaultValue`, because React resets an uncontrolled
+  form once its action resolves. Passwords are never echoed.
+
+### Two bugs found while doing it
+
+**Duplicate DOM ids on `/auth`.** Sign-in and sign-up share a page and both have `email` and
+`password` fields, so their generated ids collided. `<label for="email">` binds to the first
+match, meaning the sign-up form's label focused the sign-in input. Field ids are now scoped per
+form (`signin-email`, `signup-email`) while the submitted field names are unchanged. Verified by
+asserting zero duplicate ids and that every `label[for]` resolves.
+
+**`redirect()` inside a `try` block.** In both upload actions, the database-error `redirect()`
+sat inside a `try` whose `catch` swallowed the `NEXT_REDIRECT` it throws and re-reported it as a
+generic "Upload failed.", discarding the real message. The rewrite removes the nesting.
 
 ### Outstanding
 
@@ -269,6 +314,8 @@ gained `role="alert"`, so it is announced and seen. True per-field inline errors
   - Platform section, portrait, project manager on site
 
   Real job photography will beat stock here, and the product already collects it.
-- **Inline field-level form errors**, per finding #11 above.
 - **Favicon and OG image.** `metadataBase`, Open Graph, Twitter card, and robots directives are
   now set in `app/layout.tsx`, but there is still no icon or share image asset.
+- **The error states have not been exercised against a live Supabase instance.** They were
+  verified by driving the real components with stub actions, which covers rendering, aria wiring,
+  value preservation, and contrast, but not the actual Supabase error strings.

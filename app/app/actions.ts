@@ -1,9 +1,11 @@
 "use server";
 
 import crypto from "node:crypto";
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { signOutAction } from "@/app/auth/actions";
 import { getAppOrigin } from "@/lib/app-url";
+import type { FormState } from "@/lib/form-state";
 import { sendEmail } from "@/lib/email";
 import {
   createSupabaseAdminClient,
@@ -35,8 +37,17 @@ function getString(formData: FormData, key: string) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function toQueryError(message: string) {
-  return encodeURIComponent(message);
+/**
+ * Success for a form that stays on the page: refresh the server data and hand
+ * the confirmation back to the form, instead of navigating with `?message=`.
+ */
+function revalidatedSuccess(projectId: string, message: string): FormState {
+  revalidatePath(`/app/projects/${projectId}`);
+  return { status: "success", message };
+}
+
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
 }
 
 async function requirePmProfile() {
@@ -227,7 +238,10 @@ async function uploadProjectFile(params: {
   return filePath;
 }
 
-export async function createProjectAction(formData: FormData) {
+export async function createProjectAction(
+  _previous: FormState,
+  formData: FormData
+): Promise<FormState> {
   const { supabase, user, profile } = await requirePmProfile();
 
   const name = getString(formData, "name");
@@ -237,12 +251,20 @@ export async function createProjectAction(formData: FormData) {
   const targetEndDate = getString(formData, "targetEndDate");
   const clientEmail = getString(formData, "clientEmail").toLowerCase();
 
-  if (!name) {
-    redirect("/app/projects?error=Project%20name%20is%20required.");
-  }
+  const values = { name, location, status, startDate, targetEndDate, clientEmail };
+  const fieldErrors: Record<string, string> = {};
 
+  if (!name) {
+    fieldErrors.name = "Give the project a name.";
+  }
   if (!["not_started", "in_progress", "blocked", "complete"].includes(status)) {
-    redirect("/app/projects?error=Select%20a%20valid%20project%20status.");
+    fieldErrors.status = "Select a project status.";
+  }
+  if (startDate && targetEndDate && startDate > targetEndDate) {
+    fieldErrors.targetEndDate = "Target end date cannot be before the start date.";
+  }
+  if (Object.keys(fieldErrors).length > 0) {
+    return { status: "error", fieldErrors, values };
   }
 
   const { data: project, error: projectError } = await supabase
@@ -260,11 +282,11 @@ export async function createProjectAction(formData: FormData) {
     .single<{ id: string }>();
 
   if (projectError || !project) {
-    redirect(
-      `/app/projects?error=${toQueryError(
-        projectError?.message ?? "Unable to create project."
-      )}`
-    );
+    return {
+      status: "error",
+      message: projectError?.message ?? "Unable to create project.",
+      values
+    };
   }
 
   await supabase.from("project_members").insert({
@@ -352,13 +374,21 @@ export async function createProjectAction(formData: FormData) {
   redirect(`/app/projects/${project.id}`);
 }
 
-export async function assignClientAction(formData: FormData) {
+export async function assignClientAction(
+  _previous: FormState,
+  formData: FormData
+): Promise<FormState> {
   const { supabase, profile, user } = await requirePmProfile();
   const projectId = getString(formData, "projectId");
   const clientEmail = getString(formData, "clientEmail").toLowerCase();
+  const values = { clientEmail };
 
-  if (!projectId || !clientEmail) {
-    redirect(`/app/projects/${projectId}?error=Client%20email%20is%20required.`);
+  if (!clientEmail) {
+    return {
+      status: "error",
+      fieldErrors: { clientEmail: "Enter the client's email address." },
+      values
+    };
   }
 
   const { data: clientProfile } = await supabase
@@ -370,9 +400,14 @@ export async function assignClientAction(formData: FormData) {
     .maybeSingle<{ id: string }>();
 
   if (!clientProfile) {
-    redirect(
-      `/app/projects/${projectId}?error=Client%20account%20not%20found%20in%20this%20organization.`
-    );
+    return {
+      status: "error",
+      fieldErrors: {
+        clientEmail:
+          "No client account in your organization uses this email. Use Invite a new client instead."
+      },
+      values
+    };
   }
 
   const { error } = await supabase.from("project_members").insert({
@@ -382,9 +417,17 @@ export async function assignClientAction(formData: FormData) {
   });
 
   if (error) {
-    redirect(
-      `/app/projects/${projectId}?error=${toQueryError(error.message)}`
-    );
+    // A unique-violation here means they are already on the project, which is
+    // a problem with the email they typed, not a server failure.
+    if (/duplicate key|already exists/i.test(error.message)) {
+      return {
+        status: "error",
+        fieldErrors: { clientEmail: "This client already has access to the project." },
+        values
+      };
+    }
+
+    return { status: "error", message: error.message, values };
   }
 
   await recordActivity({
@@ -397,16 +440,24 @@ export async function assignClientAction(formData: FormData) {
     createdBy: user.id
   });
 
-  redirect(`/app/projects/${projectId}?message=Client%20assigned%20successfully.`);
+  return revalidatedSuccess(projectId, `${clientEmail} now has access to this project.`);
 }
 
-export async function createClientInviteAction(formData: FormData) {
+export async function createClientInviteAction(
+  _previous: FormState,
+  formData: FormData
+): Promise<FormState> {
   const { supabase, user, profile } = await requirePmProfile();
   const projectId = getString(formData, "projectId");
   const email = getString(formData, "email").toLowerCase();
+  const values = { email };
 
-  if (!projectId || !email) {
-    redirect(`/app/projects/${projectId}?error=Client%20email%20is%20required.`);
+  if (!email) {
+    return {
+      status: "error",
+      fieldErrors: { email: "Enter the email address to invite." },
+      values
+    };
   }
 
   const token = crypto.randomUUID();
@@ -422,7 +473,7 @@ export async function createClientInviteAction(formData: FormData) {
   });
 
   if (error) {
-    redirect(`/app/projects/${projectId}?error=${toQueryError(error.message)}`);
+    return { status: "error", message: error.message, values };
   }
 
   const origin = await getAppOrigin();
@@ -446,10 +497,27 @@ export async function createClientInviteAction(formData: FormData) {
     html: `<p>You were invited to join a project in My Star Contractor.</p><p><a href="${inviteUrl}">Accept your invite</a></p>`
   });
 
-  redirect(`/app/projects/${projectId}?message=Client%20invite%20created.`);
+  return revalidatedSuccess(projectId, `Invite sent to ${email}.`);
 }
 
-export async function createMilestoneAction(formData: FormData) {
+/** Shared milestone field checks for both create and update. */
+function validateMilestone(title: string, percentComplete: number) {
+  const fieldErrors: Record<string, string> = {};
+
+  if (!title) {
+    fieldErrors.title = "Give the milestone a title.";
+  }
+  if (Number.isNaN(percentComplete) || percentComplete < 0 || percentComplete > 100) {
+    fieldErrors.percentComplete = "Enter a whole number between 0 and 100.";
+  }
+
+  return fieldErrors;
+}
+
+export async function createMilestoneAction(
+  _previous: FormState,
+  formData: FormData
+): Promise<FormState> {
   const { supabase, user } = await requirePmProfile();
   const projectId = getString(formData, "projectId");
   const title = getString(formData, "title");
@@ -458,8 +526,10 @@ export async function createMilestoneAction(formData: FormData) {
   const percentComplete = Number(getString(formData, "percentComplete") || "0");
   const notes = getString(formData, "notes");
 
-  if (!projectId || !title) {
-    redirect(`/app/projects/${projectId}?error=Milestone%20title%20is%20required.`);
+  const values = { title, dueDate, status, notes };
+  const fieldErrors = validateMilestone(title, percentComplete);
+  if (Object.keys(fieldErrors).length > 0) {
+    return { status: "error", fieldErrors, values };
   }
 
   const { data: lastMilestone } = await supabase
@@ -483,7 +553,7 @@ export async function createMilestoneAction(formData: FormData) {
   });
 
   if (error) {
-    redirect(`/app/projects/${projectId}?error=${toQueryError(error.message)}`);
+    return { status: "error", message: error.message, values };
   }
 
   await recordActivity({
@@ -495,10 +565,13 @@ export async function createMilestoneAction(formData: FormData) {
     createdBy: user.id
   });
 
-  redirect(`/app/projects/${projectId}?message=Milestone%20created.`);
+  return revalidatedSuccess(projectId, `Milestone "${title}" created.`);
 }
 
-export async function updateMilestoneAction(formData: FormData) {
+export async function updateMilestoneAction(
+  _previous: FormState,
+  formData: FormData
+): Promise<FormState> {
   const { supabase, user } = await requirePmProfile();
   const projectId = getString(formData, "projectId");
   const milestoneId = getString(formData, "milestoneId");
@@ -507,6 +580,12 @@ export async function updateMilestoneAction(formData: FormData) {
   const status = getString(formData, "status") as MilestoneStatus;
   const percentComplete = Number(getString(formData, "percentComplete") || "0");
   const notes = getString(formData, "notes");
+
+  const values = { title, dueDate, status, notes };
+  const fieldErrors = validateMilestone(title, percentComplete);
+  if (Object.keys(fieldErrors).length > 0) {
+    return { status: "error", fieldErrors, values };
+  }
 
   const { error } = await supabase
     .from("milestones")
@@ -521,7 +600,7 @@ export async function updateMilestoneAction(formData: FormData) {
     .eq("project_id", projectId);
 
   if (error) {
-    redirect(`/app/projects/${projectId}?error=${toQueryError(error.message)}`);
+    return { status: "error", message: error.message, values };
   }
 
   await recordActivity({
@@ -533,10 +612,13 @@ export async function updateMilestoneAction(formData: FormData) {
     createdBy: user.id
   });
 
-  redirect(`/app/projects/${projectId}?message=Milestone%20updated.`);
+  return revalidatedSuccess(projectId, "Milestone updated.");
 }
 
-export async function uploadDocumentAction(formData: FormData) {
+export async function uploadDocumentAction(
+  _previous: FormState,
+  formData: FormData
+): Promise<FormState> {
   const { supabase, user } = await requirePmProfile();
   const projectId = getString(formData, "projectId");
   const title = getString(formData, "title");
@@ -545,64 +627,81 @@ export async function uploadDocumentAction(formData: FormData) {
   const milestoneId = getString(formData, "milestoneId");
   const file = formData.get("file");
 
-  if (!(file instanceof File) || file.size === 0) {
-    redirect(`/app/projects/${projectId}?error=Select%20a%20document%20file.`);
-  }
+  const values = { title, category, visibility, milestoneId };
+  const fieldErrors: Record<string, string> = {};
 
   if (!title) {
-    redirect(`/app/projects/${projectId}?error=Document%20title%20is%20required.`);
+    fieldErrors.title = "Give the document a title.";
+  }
+  if (!(file instanceof File) || file.size === 0) {
+    fieldErrors.file = "Choose a file to upload.";
   }
 
-  try {
-    ensureSafeText(title, 120, "Document title");
-    validateUploadFile(file, "documents");
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Upload failed.";
-    redirect(`/app/projects/${projectId}?error=${toQueryError(message)}`);
-  }
-
-  try {
-    const filePath = await uploadProjectFile({
-      file,
-      projectId,
-      folder: "documents"
-    });
-
-    const { error } = await supabase.from("documents").insert({
-      project_id: projectId,
-      milestone_id: milestoneId || null,
-      title,
-      category,
-      visibility,
-      file_path: filePath,
-      file_name: file.name,
-      content_type: file.type || null,
-      file_size: file.size,
-      uploaded_by: user.id
-    });
-
-    if (error) {
-      redirect(`/app/projects/${projectId}?error=${toQueryError(error.message)}`);
+  // Size and type rules are field problems too: the user picks a different file.
+  if (file instanceof File && file.size > 0) {
+    try {
+      validateUploadFile(file, "documents");
+    } catch (error) {
+      fieldErrors.file = errorMessage(error, "That file cannot be uploaded.");
     }
-
-    await recordActivity({
-      supabase,
-      projectId,
-      eventType: "document_uploaded",
-      title: "Document uploaded",
-      detail: title,
-      visibility,
-      createdBy: user.id
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Upload failed.";
-    redirect(`/app/projects/${projectId}?error=${toQueryError(message)}`);
+  }
+  if (title) {
+    try {
+      ensureSafeText(title, 120, "Document title");
+    } catch (error) {
+      fieldErrors.title = errorMessage(error, "That title cannot be used.");
+    }
   }
 
-  redirect(`/app/projects/${projectId}?message=Document%20uploaded.`);
+  if (Object.keys(fieldErrors).length > 0 || !(file instanceof File)) {
+    return { status: "error", fieldErrors, values };
+  }
+
+  let filePath: string;
+  try {
+    filePath = await uploadProjectFile({ file, projectId, folder: "documents" });
+  } catch (error) {
+    return {
+      status: "error",
+      message: errorMessage(error, "Upload failed. Try again."),
+      values
+    };
+  }
+
+  const { error } = await supabase.from("documents").insert({
+    project_id: projectId,
+    milestone_id: milestoneId || null,
+    title,
+    category,
+    visibility,
+    file_path: filePath,
+    file_name: file.name,
+    content_type: file.type || null,
+    file_size: file.size,
+    uploaded_by: user.id
+  });
+
+  if (error) {
+    return { status: "error", message: error.message, values };
+  }
+
+  await recordActivity({
+    supabase,
+    projectId,
+    eventType: "document_uploaded",
+    title: "Document uploaded",
+    detail: title,
+    visibility,
+    createdBy: user.id
+  });
+
+  return revalidatedSuccess(projectId, `"${title}" uploaded.`);
 }
 
-export async function uploadPhotoAction(formData: FormData) {
+export async function uploadPhotoAction(
+  _previous: FormState,
+  formData: FormData
+): Promise<FormState> {
   const { supabase, user } = await requirePmProfile();
   const projectId = getString(formData, "projectId");
   const caption = getString(formData, "caption");
@@ -611,65 +710,84 @@ export async function uploadPhotoAction(formData: FormData) {
   const milestoneId = getString(formData, "milestoneId");
   const file = formData.get("file");
 
+  const values = { caption, area, visibility, milestoneId };
+  const fieldErrors: Record<string, string> = {};
+
   if (!(file instanceof File) || file.size === 0) {
-    redirect(`/app/projects/${projectId}?error=Select%20a%20photo%20file.`);
+    fieldErrors.file = "Choose an image to upload.";
   }
 
-  try {
-    if (caption) {
+  if (file instanceof File && file.size > 0) {
+    try {
+      validateUploadFile(file, "photos");
+    } catch (error) {
+      fieldErrors.file = errorMessage(error, "That image cannot be uploaded.");
+    }
+  }
+  if (caption) {
+    try {
       ensureSafeText(caption, 160, "Photo caption");
+    } catch (error) {
+      fieldErrors.caption = errorMessage(error, "That caption cannot be used.");
     }
-    if (area) {
+  }
+  if (area) {
+    try {
       ensureSafeText(area, 80, "Photo area");
+    } catch (error) {
+      fieldErrors.area = errorMessage(error, "That area cannot be used.");
     }
-    validateUploadFile(file, "photos");
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Upload failed.";
-    redirect(`/app/projects/${projectId}?error=${toQueryError(message)}`);
   }
 
+  if (Object.keys(fieldErrors).length > 0 || !(file instanceof File)) {
+    return { status: "error", fieldErrors, values };
+  }
+
+  let filePath: string;
   try {
-    const filePath = await uploadProjectFile({
-      file,
-      projectId,
-      folder: "photos"
-    });
-
-    const { error } = await supabase.from("photos").insert({
-      project_id: projectId,
-      milestone_id: milestoneId || null,
-      caption: caption || null,
-      area: area || null,
-      visibility,
-      file_path: filePath,
-      file_name: file.name,
-      content_type: file.type || null,
-      file_size: file.size,
-      uploaded_by: user.id
-    });
-
-    if (error) {
-      redirect(`/app/projects/${projectId}?error=${toQueryError(error.message)}`);
-    }
-
-    await recordActivity({
-      supabase,
-      projectId,
-      eventType: "photo_uploaded",
-      title: "Photo uploaded",
-      detail: caption || area || file.name,
-      visibility,
-      createdBy: user.id
-    });
+    filePath = await uploadProjectFile({ file, projectId, folder: "photos" });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Upload failed.";
-    redirect(`/app/projects/${projectId}?error=${toQueryError(message)}`);
+    return {
+      status: "error",
+      message: errorMessage(error, "Upload failed. Try again."),
+      values
+    };
   }
 
-  redirect(`/app/projects/${projectId}?message=Photo%20uploaded.`);
+  const { error } = await supabase.from("photos").insert({
+    project_id: projectId,
+    milestone_id: milestoneId || null,
+    caption: caption || null,
+    area: area || null,
+    visibility,
+    file_path: filePath,
+    file_name: file.name,
+    content_type: file.type || null,
+    file_size: file.size,
+    uploaded_by: user.id
+  });
+
+  if (error) {
+    return { status: "error", message: error.message, values };
+  }
+
+  await recordActivity({
+    supabase,
+    projectId,
+    eventType: "photo_uploaded",
+    title: "Photo uploaded",
+    detail: caption || area || file.name,
+    visibility,
+    createdBy: user.id
+  });
+
+  return revalidatedSuccess(projectId, "Photo uploaded.");
 }
 
-export async function sendMessageAction(formData: FormData) {
+export async function sendMessageAction(
+  _previous: FormState,
+  formData: FormData
+): Promise<FormState> {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user }
@@ -681,16 +799,24 @@ export async function sendMessageAction(formData: FormData) {
 
   const projectId = getString(formData, "projectId");
   const body = getString(formData, "body");
+  const values = { body };
 
   if (!body) {
-    redirect(`/app/projects/${projectId}?error=Message%20body%20is%20required.`);
+    return {
+      status: "error",
+      fieldErrors: { body: "Write a message before sending." },
+      values
+    };
   }
 
   try {
     ensureSafeText(body, 2000, "Message");
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to send message.";
-    redirect(`/app/projects/${projectId}?error=${toQueryError(message)}`);
+    return {
+      status: "error",
+      fieldErrors: { body: errorMessage(error, "That message cannot be sent.") },
+      values
+    };
   }
 
   const { error } = await supabase.from("project_messages").insert({
@@ -700,7 +826,7 @@ export async function sendMessageAction(formData: FormData) {
   });
 
   if (error) {
-    redirect(`/app/projects/${projectId}?error=${toQueryError(error.message)}`);
+    return { status: "error", message: error.message, values };
   }
 
   const recipients = await getProjectRecipients(projectId);
@@ -722,10 +848,13 @@ export async function sendMessageAction(formData: FormData) {
     html: `<p>A new project message was posted:</p><p>${body}</p>`
   });
 
-  redirect(`/app/projects/${projectId}?message=Message%20sent.`);
+  return revalidatedSuccess(projectId, "Message sent.");
 }
 
-export async function publishUpdateAction(formData: FormData) {
+export async function publishUpdateAction(
+  _previous: FormState,
+  formData: FormData
+): Promise<FormState> {
   const { supabase, user } = await requirePmProfile();
   const projectId = getString(formData, "projectId");
   const milestoneId = getString(formData, "milestoneId");
@@ -733,16 +862,31 @@ export async function publishUpdateAction(formData: FormData) {
   const body = getString(formData, "body");
   const visibility = getString(formData, "visibility") as AssetVisibility;
 
-  if (!title || !body) {
-    redirect(`/app/projects/${projectId}?error=Update%20title%20and%20body%20are%20required.`);
+  const values = { title, body, visibility, milestoneId };
+  const fieldErrors: Record<string, string> = {};
+
+  if (!title) {
+    fieldErrors.title = "Give the update a title.";
+  } else {
+    try {
+      ensureSafeText(title, 120, "Update title");
+    } catch (error) {
+      fieldErrors.title = errorMessage(error, "That title cannot be used.");
+    }
   }
 
-  try {
-    ensureSafeText(title, 120, "Update title");
-    ensureSafeText(body, 4000, "Update body");
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to publish update.";
-    redirect(`/app/projects/${projectId}?error=${toQueryError(message)}`);
+  if (!body) {
+    fieldErrors.body = "Write the update body.";
+  } else {
+    try {
+      ensureSafeText(body, 4000, "Update body");
+    } catch (error) {
+      fieldErrors.body = errorMessage(error, "That body cannot be used.");
+    }
+  }
+
+  if (Object.keys(fieldErrors).length > 0) {
+    return { status: "error", fieldErrors, values };
   }
 
   const { error } = await supabase.from("project_updates").insert({
@@ -755,7 +899,7 @@ export async function publishUpdateAction(formData: FormData) {
   });
 
   if (error) {
-    redirect(`/app/projects/${projectId}?error=${toQueryError(error.message)}`);
+    return { status: "error", message: error.message, values };
   }
 
   await recordActivity({
@@ -789,7 +933,12 @@ export async function publishUpdateAction(formData: FormData) {
     });
   }
 
-  redirect(`/app/projects/${projectId}?message=Project%20update%20published.`);
+  return revalidatedSuccess(
+    projectId,
+    visibility === "client_visible"
+      ? "Update published. The client has been notified."
+      : "Internal note saved. The client cannot see it."
+  );
 }
 
 export async function markNotificationsReadAction() {
@@ -851,7 +1000,9 @@ export async function markProjectMessagesReadAction(formData: FormData) {
     }
   }
 
-  redirect(`/app/projects/${projectId}?message=Thread%20marked%20read.`);
+  // The thread itself flips to "Read", which is the confirmation. No banner
+  // and no query parameter left behind in the URL.
+  revalidatePath(`/app/projects/${projectId}`);
 }
 
 export { signOutAction };

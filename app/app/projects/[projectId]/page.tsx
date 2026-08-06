@@ -17,11 +17,17 @@ import {
   uploadPhotoAction
 } from "@/app/app/actions";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
-import type {
-  AssetVisibility,
-  DocumentCategory,
-  MilestoneRecord
-} from "@/lib/types";
+import {
+  AssignClientForm,
+  CreateMilestoneForm,
+  InviteClientForm,
+  MilestoneEditor,
+  PublishUpdateForm,
+  SendMessageForm,
+  UploadDocumentForm,
+  UploadPhotoForm
+} from "@/components/project-forms";
+import type { AssetVisibility, DocumentCategory } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -57,10 +63,6 @@ function formatDate(value: string | null) {
   });
 }
 
-function formatDateInput(value: string | null) {
-  return value ? value.slice(0, 10) : "";
-}
-
 function formatBytes(value: number | null) {
   if (!value) {
     return "Unknown size";
@@ -73,73 +75,12 @@ function formatBytes(value: number | null) {
   return `${(value / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function MilestoneEditor({
-  projectId,
-  milestone
-}: {
-  projectId: string;
-  milestone: MilestoneRecord;
-}) {
-  return (
-    <form action={updateMilestoneAction} className="editor-card">
-      <input type="hidden" name="projectId" value={projectId} />
-      <input type="hidden" name="milestoneId" value={milestone.id} />
-      <div className="editor-card__header">
-        <strong>{milestone.title}</strong>
-        <span className="status-pill">{milestone.status.replace("_", " ")}</span>
-      </div>
-      <div className="form-grid compact-grid">
-        <label className="field">
-          <span>Title</span>
-          <input type="text" name="title" defaultValue={milestone.title} required />
-        </label>
-        <label className="field">
-          <span>Status</span>
-          <select name="status" defaultValue={milestone.status}>
-            <option value="not_started">Not started</option>
-            <option value="in_progress">In progress</option>
-            <option value="blocked">Blocked</option>
-            <option value="complete">Complete</option>
-          </select>
-        </label>
-        <label className="field">
-          <span>Percent complete</span>
-          <input
-            type="number"
-            name="percentComplete"
-            min="0"
-            max="100"
-            defaultValue={milestone.percent_complete}
-          />
-        </label>
-        <label className="field">
-          <span>Due date</span>
-          <input
-            type="date"
-            name="dueDate"
-            defaultValue={formatDateInput(milestone.due_date)}
-          />
-        </label>
-      </div>
-      <label className="field">
-        <span>Notes</span>
-        <textarea name="notes" defaultValue={milestone.notes ?? ""} rows={3} />
-      </label>
-      <button type="submit" className="button button--ghost">
-        Update milestone
-      </button>
-    </form>
-  );
-}
-
 export default async function ProjectDetailPage({
   params,
   searchParams
 }: {
   params: Promise<{ projectId: string }>;
   searchParams: Promise<{
-    error?: string;
-    message?: string;
     q?: string;
     visibility?: AssetVisibility | "all";
     category?: string;
@@ -170,17 +111,6 @@ export default async function ProjectDetailPage({
           { schema: "public", table: "notifications", filter: `user_id=eq.${profile.id}` }
         ]}
       />
-
-      {query.error || query.message ? (
-        <article
-          className={`panel ${query.error ? "panel--error" : ""}`}
-          role="alert"
-          aria-live="polite"
-        >
-          <p className="eyebrow">{query.error ? "Action failed" : "Status"}</p>
-          <p className="message-copy">{query.error ?? query.message}</p>
-        </article>
-      ) : null}
 
       <article className="panel">
         <h1>{data.project.name}</h1>
@@ -264,37 +194,10 @@ export default async function ProjectDetailPage({
               <h2>Add a milestone</h2>
               <p>Overall project completion is derived from these stages.</p>
             </div>
-            <form action={createMilestoneAction} className="form-grid">
-              <input type="hidden" name="projectId" value={data.project.id} />
-              <label className="field">
-                <span>Title</span>
-                <input type="text" name="title" required />
-              </label>
-              <label className="field">
-                <span>Status</span>
-                <select name="status" defaultValue="not_started">
-                  <option value="not_started">Not started</option>
-                  <option value="in_progress">In progress</option>
-                  <option value="blocked">Blocked</option>
-                  <option value="complete">Complete</option>
-                </select>
-              </label>
-              <label className="field">
-                <span>Percent complete</span>
-                <input type="number" name="percentComplete" min="0" max="100" defaultValue="0" />
-              </label>
-              <label className="field">
-                <span>Due date</span>
-                <input type="date" name="dueDate" />
-              </label>
-              <label className="field field--full">
-                <span>Notes</span>
-                <textarea name="notes" rows={3} />
-              </label>
-              <button type="submit" className="button button--solid">
-                Create milestone
-              </button>
-            </form>
+            <CreateMilestoneForm
+              action={createMilestoneAction}
+              projectId={data.project.id}
+            />
           </article>
         ) : null}
 
@@ -315,6 +218,7 @@ export default async function ProjectDetailPage({
               {data.milestones.map((milestone) => (
                 <MilestoneEditor
                   key={milestone.id}
+                  action={updateMilestoneAction}
                   projectId={data.project.id}
                   milestone={milestone}
                 />
@@ -390,54 +294,11 @@ export default async function ProjectDetailPage({
                 <h2>Upload a document</h2>
                 <p>Contracts, permits, plans, and change orders.</p>
               </div>
-              <form action={uploadDocumentAction} className="form-grid">
-                <input type="hidden" name="projectId" value={data.project.id} />
-                <label className="field">
-                  <span>Title</span>
-                  <input type="text" name="title" required />
-                </label>
-                <label className="field">
-                  <span>Category</span>
-                  <select name="category" defaultValue="other">
-                    {documentCategories.map((value) => (
-                      <option key={value} value={value}>
-                        {value.replace("_", " ")}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="field">
-                  <span>Visibility</span>
-                  <select name="visibility" defaultValue="internal">
-                    {visibilityOptions.map((value) => (
-                      <option key={value} value={value}>
-                        {value.replace("_", " ")}
-                      </option>
-                    ))}
-                  </select>
-                  <small className="field__hint">
-                    Internal stays hidden from the client.
-                  </small>
-                </label>
-                <label className="field">
-                  <span>Attach to milestone</span>
-                  <select name="milestoneId" defaultValue="">
-                    <option value="">No milestone</option>
-                    {data.milestones.map((milestone) => (
-                      <option key={milestone.id} value={milestone.id}>
-                        {milestone.title}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="field field--full">
-                  <span>File</span>
-                  <input type="file" name="file" required />
-                </label>
-                <button type="submit" className="button button--solid">
-                  Upload document
-                </button>
-              </form>
+              <UploadDocumentForm
+                action={uploadDocumentAction}
+                projectId={data.project.id}
+                milestones={data.milestones}
+              />
             </article>
 
             <article className="panel">
@@ -445,52 +306,11 @@ export default async function ProjectDetailPage({
                 <h2>Upload a photo</h2>
                 <p>Progress photos with area and visibility control.</p>
               </div>
-              <form action={uploadPhotoAction} className="form-grid">
-                <input type="hidden" name="projectId" value={data.project.id} />
-                <label className="field">
-                  <span>Caption</span>
-                  <input type="text" name="caption" />
-                </label>
-                <label className="field">
-                  <span>Area</span>
-                  <input
-                    type="text"
-                    name="area"
-                    placeholder="Kitchen, exterior, level 2"
-                  />
-                </label>
-                <label className="field">
-                  <span>Visibility</span>
-                  <select name="visibility" defaultValue="internal">
-                    {visibilityOptions.map((value) => (
-                      <option key={value} value={value}>
-                        {value.replace("_", " ")}
-                      </option>
-                    ))}
-                  </select>
-                  <small className="field__hint">
-                    Internal stays hidden from the client.
-                  </small>
-                </label>
-                <label className="field">
-                  <span>Attach to milestone</span>
-                  <select name="milestoneId" defaultValue="">
-                    <option value="">No milestone</option>
-                    {data.milestones.map((milestone) => (
-                      <option key={milestone.id} value={milestone.id}>
-                        {milestone.title}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="field field--full">
-                  <span>Image</span>
-                  <input type="file" name="file" accept="image/*" required />
-                </label>
-                <button type="submit" className="button button--solid">
-                  Upload photo
-                </button>
-              </form>
+              <UploadPhotoForm
+                action={uploadPhotoAction}
+                projectId={data.project.id}
+                milestones={data.milestones}
+              />
             </article>
           </div>
         ) : null}
@@ -616,41 +436,11 @@ export default async function ProjectDetailPage({
                 activity feed. Internal notes stay with your team.
               </p>
             </div>
-            <form action={publishUpdateAction} className="form-grid">
-              <input type="hidden" name="projectId" value={data.project.id} />
-              <label className="field">
-                <span>Title</span>
-                <input type="text" name="title" required />
-              </label>
-              <label className="field">
-                <span>Visibility</span>
-                <select name="visibility" defaultValue="client_visible">
-                  {visibilityOptions.map((value) => (
-                    <option key={value} value={value}>
-                      {value.replace("_", " ")}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
-                <span>Attach to milestone</span>
-                <select name="milestoneId" defaultValue="">
-                  <option value="">No milestone</option>
-                  {data.milestones.map((milestone) => (
-                    <option key={milestone.id} value={milestone.id}>
-                      {milestone.title}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field field--full">
-                <span>Update body</span>
-                <textarea name="body" rows={4} required />
-              </label>
-              <button type="submit" className="button button--solid">
-                Publish update
-              </button>
-            </form>
+            <PublishUpdateForm
+              action={publishUpdateAction}
+              projectId={data.project.id}
+              milestones={data.milestones}
+            />
           </article>
         ) : null}
 
@@ -709,16 +499,10 @@ export default async function ProjectDetailPage({
               ))}
             </div>
           )}
-          <form action={sendMessageAction} className="form-stack">
-            <input type="hidden" name="projectId" value={data.project.id} />
-            <label className="field">
-              <span>New message</span>
-              <textarea name="body" rows={4} required />
-            </label>
-            <button type="submit" className="button button--solid">
-              Send message
-            </button>
-          </form>
+          <SendMessageForm
+            action={sendMessageAction}
+            projectId={data.project.id}
+          />
           <div className="panel__divider" />
           <div className="hero-actions">
             <form action={markProjectMessagesReadAction}>
@@ -781,21 +565,10 @@ export default async function ProjectDetailPage({
                 <h2>Assign an existing client</h2>
                 <p>The account must already exist in your organization.</p>
               </div>
-              <form action={assignClientAction} className="form-stack">
-                <input type="hidden" name="projectId" value={data.project.id} />
-                <label className="field">
-                  <span>Client email</span>
-                  <input
-                    type="email"
-                    name="clientEmail"
-                    autoComplete="off"
-                    required
-                  />
-                </label>
-                <button type="submit" className="button button--solid">
-                  Assign client
-                </button>
-              </form>
+              <AssignClientForm
+                action={assignClientAction}
+                projectId={data.project.id}
+              />
             </article>
 
             <article className="panel">
@@ -806,16 +579,10 @@ export default async function ProjectDetailPage({
                   up.
                 </p>
               </div>
-              <form action={createClientInviteAction} className="form-stack">
-                <input type="hidden" name="projectId" value={data.project.id} />
-                <label className="field">
-                  <span>Email</span>
-                  <input type="email" name="email" autoComplete="off" required />
-                </label>
-                <button type="submit" className="button button--ghost">
-                  Send invite
-                </button>
-              </form>
+              <InviteClientForm
+                action={createClientInviteAction}
+                projectId={data.project.id}
+              />
             </article>
           </div>
         ) : null}
