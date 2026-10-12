@@ -4,8 +4,8 @@ Construction management platform for project managers and clients.
 
 ## Current status
 
-- Current phase: `Phase 3 complete`
-- Overall status: `Phase 3 is implemented, migrated to Supabase, and validated for invites, messaging, updates, notifications, and demo seeding`
+- Current phase: `Phase 4 not started`
+- Overall status: `Phases 1-3 are complete and on main. The design-system rebuild is finished and green (typecheck, lint, build) on claude/site-redesign-audit-2xfa57, but it is not merged and has never been run against live Supabase.`
 - Rule: update this README whenever a phase is completed or the roadmap changes
 
 ## Tech stack
@@ -55,6 +55,15 @@ choice and what is still outstanding.
 - Demo seed script for release prep
 - Phase 1, Phase 2, and Phase 3 SQL schema and RLS migrations
 - Live Supabase project connected and validated
+
+On `claude/site-redesign-audit-2xfa57`, not yet merged:
+
+- Design audit of every surface, recorded in `DESIGN_AUDIT.md`
+- Rebuilt design system: cool graphite palette, enforced radius scale, full dark mode
+- Sticky section navigation across the project workspace
+- Inline per-field form validation on every form
+- Designed focus states, WCAG AA contrast throughout, reduced-motion support
+- Open Graph, Twitter card, and robots metadata
 
 ## Phased roadmap
 
@@ -202,8 +211,89 @@ Definition of done:
 - PM can invite new clients with a direct onboarding link.
 - The MVP is stable enough for demo use and initial release testing.
 
-## How to update this roadmap
+### Phase 4 - Land the redesign and fix data correctness
 
+Status: `Not started`
+
+Goal: get the finished redesign onto main, prove it works against real data, and fix the
+query bugs that only show up once a project has real volume.
+
+Tasks in build order:
+
+1. [ ] Merge the redesign.
+   - Open a PR from `claude/site-redesign-audit-2xfa57` and review the three commits.
+   - Branch is green on typecheck, lint, and build as of 2026-10-12.
+   - Nothing else in this phase should start before this lands. It is three commits of
+     unmerged work and it only gets harder to merge.
+2. [ ] Run the redesigned app against live Supabase.
+   - The authenticated surfaces have never been seen with real data. They were verified
+     with a temporary preview route using stub data, which proves layout and styling but
+     not behaviour.
+   - Re-run the Phase 1-3 validation checklists. Every form was rewritten, so prior
+     validation no longer covers the current code.
+3. [ ] Verify inline errors against real Supabase error strings.
+   - The mapping from Supabase messages to field errors is reasoned, not tested. Check
+     duplicate signup, wrong password, expired invite, oversized upload, and RLS denial.
+4. [ ] Fix the message thread window.
+   - `getProjectWorkspaceForProfile` orders messages ascending and takes 50, which returns
+     the 50 **oldest**. Past 50 messages in a thread, newly sent ones never render, even
+     though realtime refresh fires.
+   - Order descending, take 50, reverse for display, or paginate properly.
+5. [ ] Bound the document and photo queries.
+   - Both load every row for the project with no limit. A job with several hundred photos
+     renders them all into one grid.
+6. [ ] Surface truncation the user cannot currently see.
+   - Activity caps at 20 and updates at 20 with no indication more exist and no way to
+     reach them. A PM reading the timeline has no idea it is clipped.
+
+Definition of done:
+
+- The redesign is on main.
+- A PM and a client account have been driven through the full workspace against live
+  Supabase, including the error paths.
+- No list in the workspace silently hides data.
+
+### Phase 5 - Test the access boundary, then field readiness
+
+Status: `Not started`
+
+Goal: protect the one thing that would genuinely damage a customer, then make the app
+usable where the work actually happens.
+
+Tasks in build order:
+
+1. [ ] Add a test framework. There is currently none, and no tests.
+2. [ ] Test the PM/client visibility boundary first, before anything else.
+   - The worst-case bug in this product is an internal document, photo, note, or activity
+     event reaching a client. That boundary is enforced by RLS policies plus visibility
+     filters in `lib/data.ts`, and nothing re-checks it automatically.
+   - Cover: internal vs client-visible documents, photos, activity events, and updates;
+     a client reading a project they are not a member of; an outsider reading messages.
+3. [ ] Test the server actions' validation branches, which are now the input gate.
+4. [ ] Check the workspace on a phone.
+   - This is a construction product and project managers are on site. Only the marketing
+     page has been verified at 390px; the workspace and its section rail have not.
+   - Include photo upload from a phone camera.
+5. [ ] Decide what happens on bad signal.
+   - Job sites have poor reception. At minimum, an upload that fails partway should say so
+     and be retryable rather than silently losing the file.
+6. [ ] Launch assets.
+   - Hero photograph, 4:3 landscape, wide shot of an active job site.
+   - Platform section photograph, portrait, project manager on site.
+   - Both slots already hold their final dimensions, so dropping images in shifts nothing.
+   - Favicon and an Open Graph share image.
+7. [ ] Dependency housekeeping.
+   - `npm audit` reports 6 vulnerabilities (5 high, 1 critical) in the installed tree,
+     transitively via `sharp`, `ws`, and `source-map-js`. Check whether `npm audit fix`
+     resolves them without a breaking bump.
+
+Definition of done:
+
+- A test suite proves a client cannot see internal assets, and it runs in CI.
+- The workspace is usable one-handed on a phone on site.
+- The marketing page ships with real photography and a share card.
+
+## How to update this roadmap
 When a phase is completed:
 
 - Change `Current phase` to the next phase
