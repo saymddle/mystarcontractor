@@ -27,9 +27,25 @@ import {
   UploadDocumentForm,
   UploadPhotoForm
 } from "@/components/project-forms";
-import type { AssetVisibility, DocumentCategory } from "@/lib/types";
+import type {
+  AssetVisibility,
+  DocumentCategory,
+  WorkspaceSection
+} from "@/lib/types";
 
 export const dynamic = "force-dynamic";
+
+const WORKSPACE_SECTIONS: WorkspaceSection[] = [
+  "documents",
+  "photos",
+  "activity",
+  "messages",
+  "updates"
+];
+
+function isWorkspaceSection(value?: string): value is WorkspaceSection {
+  return Boolean(value) && WORKSPACE_SECTIONS.includes(value as WorkspaceSection);
+}
 
 const visibilityOptions: Array<AssetVisibility> = ["internal", "client_visible"];
 const documentCategories: Array<DocumentCategory> = [
@@ -75,6 +91,63 @@ function formatBytes(value: number | null) {
   return `${(value / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+type WorkspaceQuery = {
+  q?: string;
+  visibility?: AssetVisibility | "all";
+  category?: string;
+  show?: string;
+};
+
+/** Expands one section while keeping the active filters and landing on it. */
+function expandHref(
+  query: WorkspaceQuery,
+  section: WorkspaceSection,
+  anchor: string
+) {
+  const params = new URLSearchParams();
+
+  if (query.q) {
+    params.set("q", query.q);
+  }
+  if (query.visibility && query.visibility !== "all") {
+    params.set("visibility", query.visibility);
+  }
+  if (query.category && query.category !== "all") {
+    params.set("category", query.category);
+  }
+  params.set("show", section);
+
+  return `?${params.toString()}#${anchor}`;
+}
+
+/**
+ * Tells the user a list is clipped and gives them a way to reach the rest.
+ * These lists previously truncated with no indication that anything was hidden.
+ */
+function Truncation({
+  shown,
+  total,
+  noun,
+  href
+}: {
+  shown: number;
+  total: number;
+  noun: string;
+  href: string;
+}) {
+  if (total <= shown) {
+    return null;
+  }
+
+  return (
+    <p className="list-note">
+      Showing the most recent <span className="num">{shown}</span> of{" "}
+      <span className="num">{total}</span> {noun}.{" "}
+      <a href={href}>Show all</a>
+    </p>
+  );
+}
+
 export default async function ProjectDetailPage({
   params,
   searchParams
@@ -84,6 +157,7 @@ export default async function ProjectDetailPage({
     q?: string;
     visibility?: AssetVisibility | "all";
     category?: string;
+    show?: string;
   }>;
 }) {
   const { profile } = await requireUserContext();
@@ -92,7 +166,8 @@ export default async function ProjectDetailPage({
   const data = await getProjectWorkspaceForProfile(projectId, profile, {
     query: query.q,
     visibility: query.visibility,
-    documentCategory: query.category
+    documentCategory: query.category,
+    expand: isWorkspaceSection(query.show) ? query.show : undefined
   });
 
   if (!data) {
@@ -349,6 +424,12 @@ export default async function ProjectDetailPage({
                 ))}
               </div>
             )}
+            <Truncation
+              shown={data.documents.length}
+              total={data.counts.documents}
+              noun="documents"
+              href={expandHref(query, "documents", "files")}
+            />
           </article>
 
           <article className="panel">
@@ -390,6 +471,12 @@ export default async function ProjectDetailPage({
                 ))}
               </div>
             )}
+            <Truncation
+              shown={data.photos.length}
+              total={data.counts.photos}
+              noun="photos"
+              href={expandHref(query, "photos", "files")}
+            />
           </article>
         </div>
       </section>
@@ -420,6 +507,12 @@ export default async function ProjectDetailPage({
               ))}
             </ul>
           )}
+          <Truncation
+            shown={data.activity.length}
+            total={data.counts.activity}
+            noun="events"
+            href={expandHref(query, "activity", "activity")}
+          />
         </article>
       </section>
 
@@ -468,6 +561,12 @@ export default async function ProjectDetailPage({
               ))}
             </div>
           )}
+          <Truncation
+            shown={data.updates.length}
+            total={data.counts.updates}
+            noun="updates"
+            href={expandHref(query, "updates", "updates")}
+          />
         </article>
       </section>
 
@@ -478,6 +577,13 @@ export default async function ProjectDetailPage({
           <div className="panel__heading">
             <h2>Project conversation</h2>
           </div>
+          {/* Above the thread: the clipped messages are the older ones. */}
+          <Truncation
+            shown={data.messages.length}
+            total={data.counts.messages}
+            noun="messages"
+            href={expandHref(query, "messages", "messages")}
+          />
           {data.messages.length === 0 ? (
             <div className="empty-state">
               <p>No messages in this thread yet. Send the first one below.</p>

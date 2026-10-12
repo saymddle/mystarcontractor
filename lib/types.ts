@@ -190,6 +190,21 @@ export interface ProjectWithMembers extends ProjectRecord {
   }>;
 }
 
+/** Sections of the project workspace that load a bounded slice of a larger set. */
+export type WorkspaceSection =
+  | "documents"
+  | "photos"
+  | "activity"
+  | "messages"
+  | "updates";
+
+/**
+ * Total rows matching the active filters, ignoring the display limit. The page
+ * compares these against the rows it received to tell the user when a list is
+ * showing only part of what exists.
+ */
+export type WorkspaceCounts = Record<WorkspaceSection, number>;
+
 export interface ProjectWorkspace {
   project: ProjectWithMembers;
   milestones: MilestoneRecord[];
@@ -199,4 +214,5 @@ export interface ProjectWorkspace {
   messages: ProjectMessageRecord[];
   updates: ProjectUpdateRecord[];
   invites: ProjectInviteRecord[];
+  counts: WorkspaceCounts;
 }

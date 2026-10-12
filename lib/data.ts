@@ -17,8 +17,10 @@ import type {
   ProjectRecord,
   ProjectUpdateRecord,
   ProjectWithMembers,
-  ProjectWorkspace
+  ProjectWorkspace,
+  WorkspaceSection
 } from "@/lib/types";
+import { visibilityFilterFor } from "@/lib/visibility";
 
 async function getClientProjects(profile: ProfileWithOrganization) {
   const supabase = await createSupabaseServerClient();
@@ -154,6 +156,25 @@ async function attachSignedUrls<T extends { file_path: string }>(
   return signed;
 }
 
+/**
+ * How many rows each workspace section loads by default, and how many when the
+ * user asks to expand one. Documents and photos previously loaded every row for
+ * the project, which does not survive a job with several hundred photos.
+ */
+const SECTION_LIMITS: Record<WorkspaceSection, number> = {
+  documents: 24,
+  photos: 24,
+  activity: 20,
+  messages: 50,
+  updates: 20
+};
+
+const EXPANDED_LIMIT = 500;
+
+function limitFor(section: WorkspaceSection, expand?: WorkspaceSection) {
+  return expand === section ? EXPANDED_LIMIT : SECTION_LIMITS[section];
+}
+
 export async function getProjectWorkspaceForProfile(
   projectId: string,
   profile: ProfileWithOrganization,
@@ -161,6 +182,7 @@ export async function getProjectWorkspaceForProfile(
     query?: string;
     visibility?: AssetVisibility | "all";
     documentCategory?: string;
+    expand?: WorkspaceSection;
   }
 ): Promise<ProjectWorkspace | null> {
   const base = await getProjectByIdForProfile(projectId, profile);
@@ -174,27 +196,32 @@ export async function getProjectWorkspaceForProfile(
   let documentQuery = supabase
     .from("documents")
     .select(
-      "id, project_id, milestone_id, title, category, visibility, file_path, file_name, content_type, file_size, uploaded_by, uploaded_at"
+      "id, project_id, milestone_id, title, category, visibility, file_path, file_name, content_type, file_size, uploaded_by, uploaded_at",
+      { count: "exact" }
     )
     .eq("project_id", projectId)
-    .order("uploaded_at", { ascending: false });
+    .order("uploaded_at", { ascending: false })
+    .limit(limitFor("documents", filters.expand));
 
   let photoQuery = supabase
     .from("photos")
     .select(
-      "id, project_id, milestone_id, caption, area, visibility, file_path, file_name, content_type, file_size, uploaded_by, uploaded_at"
+      "id, project_id, milestone_id, caption, area, visibility, file_path, file_name, content_type, file_size, uploaded_by, uploaded_at",
+      { count: "exact" }
     )
     .eq("project_id", projectId)
-    .order("uploaded_at", { ascending: false });
+    .order("uploaded_at", { ascending: false })
+    .limit(limitFor("photos", filters.expand));
 
   let activityQuery = supabase
     .from("activity_events")
     .select(
-      "id, project_id, event_type, visibility, title, detail, created_by, created_at"
+      "id, project_id, event_type, visibility, title, detail, created_by, created_at",
+      { count: "exact" }
     )
     .eq("project_id", projectId)
     .order("created_at", { ascending: false })
-    .limit(20);
+    .limit(limitFor("activity", filters.expand));
 
   const q = filters.query?.trim();
 
@@ -204,34 +231,48 @@ export async function getProjectWorkspaceForProfile(
     activityQuery = activityQuery.or(`title.ilike.%${q}%,detail.ilike.%${q}%`);
   }
 
-  if (filters.visibility && filters.visibility !== "all") {
-    documentQuery = documentQuery.eq("visibility", filters.visibility);
-    photoQuery = photoQuery.eq("visibility", filters.visibility);
-    activityQuery = activityQuery.eq("visibility", filters.visibility);
+  // Defence in depth. RLS is the control that protects this data; constraining
+  // the query too means a policy regression alone cannot leak internal assets.
+  const visibility = visibilityFilterFor(profile.role, filters.visibility);
+
+  if (visibility) {
+    documentQuery = documentQuery.eq("visibility", visibility);
+    photoQuery = photoQuery.eq("visibility", visibility);
+    activityQuery = activityQuery.eq("visibility", visibility);
   }
 
   if (filters.documentCategory && filters.documentCategory !== "all") {
     documentQuery = documentQuery.eq("category", filters.documentCategory);
   }
 
-  const [{ data: documents }, { data: photos }, { data: activity }] =
-    await Promise.all([documentQuery, photoQuery, activityQuery]);
+  const [
+    { data: documents, count: documentCount },
+    { data: photos, count: photoCount },
+    { data: activity, count: activityCount }
+  ] = await Promise.all([documentQuery, photoQuery, activityQuery]);
 
-  const { data: messages } = await supabase
+  // Newest first, then reversed for chronological display. Ordering ascending
+  // and taking 50 returned the 50 OLDEST rows, so once a thread passed 50
+  // messages every new one fell outside the window and never rendered.
+  const { data: messagesDesc, count: messageCount } = await supabase
     .from("project_messages")
-    .select("id, project_id, sender_id, body, created_at")
-    .eq("project_id", projectId)
-    .order("created_at", { ascending: true })
-    .limit(50);
-
-  const { data: updates } = await supabase
-    .from("project_updates")
-    .select(
-      "id, project_id, milestone_id, title, body, visibility, created_by, created_at"
-    )
+    .select("id, project_id, sender_id, body, created_at", { count: "exact" })
     .eq("project_id", projectId)
     .order("created_at", { ascending: false })
-    .limit(20);
+    .limit(limitFor("messages", filters.expand));
+
+  const messages = (messagesDesc ?? []).slice().reverse();
+
+  const { data: updates, count: updateCount } = await supabase
+    .from("project_updates")
+    .select(
+      "id, project_id, milestone_id, title, body, visibility, created_by, created_at",
+      { count: "exact" }
+    )
+    .eq("project_id", projectId)
+    .match(visibility ? { visibility } : {})
+    .order("created_at", { ascending: false })
+    .limit(limitFor("updates", filters.expand));
 
   const { data: invites } =
     profile.role === "pm"
@@ -242,7 +283,7 @@ export async function getProjectWorkspaceForProfile(
           .order("created_at", { ascending: false })
       : { data: [] };
 
-  const messageIds = (messages ?? []).map((message) => message.id);
+  const messageIds = messages.map((message) => message.id);
   let readSet = new Set<string>();
 
   if (messageIds.length > 0) {
@@ -255,7 +296,7 @@ export async function getProjectWorkspaceForProfile(
     readSet = new Set((reads ?? []).map((entry) => entry.message_id));
   }
 
-  const senderIds = [...new Set((messages ?? []).map((message) => message.sender_id))];
+  const senderIds = [...new Set(messages.map((message) => message.sender_id))];
   let senderDirectory = new Map<string, string>();
 
   if (senderIds.length > 0) {
@@ -274,13 +315,20 @@ export async function getProjectWorkspaceForProfile(
     documents: await attachSignedUrls((documents ?? []) as DocumentRecord[]),
     photos: await attachSignedUrls((photos ?? []) as PhotoRecord[]),
     activity: (activity ?? []) as ActivityRecord[],
-    messages: ((messages ?? []) as ProjectMessageRecord[]).map((message) => ({
+    messages: (messages as ProjectMessageRecord[]).map((message) => ({
       ...message,
       sender_name: senderDirectory.get(message.sender_id) ?? "Unnamed user",
       is_read: message.sender_id === profile.id ? true : readSet.has(message.id)
     })),
     updates: (updates ?? []) as ProjectUpdateRecord[],
-    invites: (invites ?? []) as ProjectInviteRecord[]
+    invites: (invites ?? []) as ProjectInviteRecord[],
+    counts: {
+      documents: documentCount ?? 0,
+      photos: photoCount ?? 0,
+      activity: activityCount ?? 0,
+      messages: messageCount ?? 0,
+      updates: updateCount ?? 0
+    }
   };
 }
 

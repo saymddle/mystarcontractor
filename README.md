@@ -4,8 +4,8 @@ Construction management platform for project managers and clients.
 
 ## Current status
 
-- Current phase: `Phase 4 not started`
-- Overall status: `Phases 1-3 are complete and on main. The design-system rebuild is finished and green (typecheck, lint, build) on claude/site-redesign-audit-2xfa57, but it is not merged and has never been run against live Supabase.`
+- Current phase: `Phase 4 in progress`
+- Overall status: `Phases 1-3 are complete and on main. The redesign and the Phase 4 data fixes are on claude/site-redesign-audit-2xfa57, open as PR #1. Everything that can be verified without database credentials has been; nothing has been run against live Supabase.`
 - Rule: update this README whenever a phase is completed or the roadmap changes
 
 ## Tech stack
@@ -213,38 +213,34 @@ Definition of done:
 
 ### Phase 4 - Land the redesign and fix data correctness
 
-Status: `Not started`
+Status: `In progress - blocked on database credentials`
 
 Goal: get the finished redesign onto main, prove it works against real data, and fix the
 query bugs that only show up once a project has real volume.
 
 Tasks in build order:
 
-1. [ ] Merge the redesign.
-   - Open a PR from `claude/site-redesign-audit-2xfa57` and review the three commits.
-   - Branch is green on typecheck, lint, and build as of 2026-10-12.
-   - Nothing else in this phase should start before this lands. It is three commits of
-     unmerged work and it only gets harder to merge.
-2. [ ] Run the redesigned app against live Supabase.
+1. [x] Open the PR. `#1`, awaiting review and merge.
+2. [ ] Run the redesigned app against live Supabase. **Blocked:** no `.env.local`, no
+   Supabase credentials in the environment, and the Supabase MCP server disconnected
+   before it could be used.
    - The authenticated surfaces have never been seen with real data. They were verified
      with a temporary preview route using stub data, which proves layout and styling but
      not behaviour.
    - Re-run the Phase 1-3 validation checklists. Every form was rewritten, so prior
      validation no longer covers the current code.
-3. [ ] Verify inline errors against real Supabase error strings.
+3. [ ] Verify inline errors against real Supabase error strings. **Blocked**, same reason.
    - The mapping from Supabase messages to field errors is reasoned, not tested. Check
      duplicate signup, wrong password, expired invite, oversized upload, and RLS denial.
-4. [ ] Fix the message thread window.
+4. [x] Fix the message thread window.
    - `getProjectWorkspaceForProfile` orders messages ascending and takes 50, which returns
      the 50 **oldest**. Past 50 messages in a thread, newly sent ones never render, even
      though realtime refresh fires.
-   - Order descending, take 50, reverse for display, or paginate properly.
-5. [ ] Bound the document and photo queries.
-   - Both load every row for the project with no limit. A job with several hundred photos
-     renders them all into one grid.
-6. [ ] Surface truncation the user cannot currently see.
-   - Activity caps at 20 and updates at 20 with no indication more exist and no way to
-     reach them. A PM reading the timeline has no idea it is clipped.
+   - Now orders descending, takes 50, and reverses for display.
+5. [x] Bound the document and photo queries. Both cap at 24 with an expandable view.
+6. [x] Surface truncation the user cannot currently see.
+   - Every clipped list now says how many of how many it is showing and links to the
+     rest, via a `?show=<section>` parameter that preserves the active filters.
 
 Definition of done:
 
@@ -255,25 +251,32 @@ Definition of done:
 
 ### Phase 5 - Test the access boundary, then field readiness
 
-Status: `Not started`
+Status: `In progress`
 
 Goal: protect the one thing that would genuinely damage a customer, then make the app
 usable where the work actually happens.
 
 Tasks in build order:
 
-1. [ ] Add a test framework. There is currently none, and no tests.
-2. [ ] Test the PM/client visibility boundary first, before anything else.
+1. [x] Add a test framework. Vitest, `npm test`.
+2. [~] Test the PM/client visibility boundary first, before anything else.
    - The worst-case bug in this product is an internal document, photo, note, or activity
      event reaching a client. That boundary is enforced by RLS policies plus visibility
      filters in `lib/data.ts`, and nothing re-checks it automatically.
-   - Cover: internal vs client-visible documents, photos, activity events, and updates;
-     a client reading a project they are not a member of; an outsider reading messages.
-3. [ ] Test the server actions' validation branches, which are now the input gate.
-4. [ ] Check the workspace on a phone.
-   - This is a construction product and project managers are on site. Only the marketing
-     page has been verified at 390px; the workspace and its section rail have not.
-   - Include photo upload from a phone camera.
+   - `lib/visibility.ts` now constrains asset queries by role as well, so a client is
+     pinned to `client_visible` regardless of what arrives in the URL. Two independent
+     mechanisms must fail before anything leaks. Covered by `tests/visibility.test.ts`.
+   - **Still outstanding:** the RLS policies themselves are untested and need an
+     integration test against Postgres with the migrations applied. The unit tests cover
+     the application-layer constraint in front of them, not the policies.
+3. [x] Test the server actions' validation branches, which are now the input gate.
+   - Rules extracted to `lib/validation.ts` and covered by `tests/validation.test.ts`.
+4. [x] Check the workspace on a phone.
+   - Fixed 244px of horizontal overflow: `.app-content` used an implicit `auto` grid
+     track, which is sized by its content's min-content width and cannot shrink below it.
+   - Raised every tap target to the 44px minimum and made the section rail scroll.
+   - Verified at 360, 390, 768 and 1440px. **Still outstanding:** photo upload from a
+     phone camera.
 5. [ ] Decide what happens on bad signal.
    - Job sites have poor reception. At minimum, an upload that fails partway should say so
      and be retryable rather than silently losing the file.
@@ -282,10 +285,12 @@ Tasks in build order:
    - Platform section photograph, portrait, project manager on site.
    - Both slots already hold their final dimensions, so dropping images in shifts nothing.
    - Favicon and an Open Graph share image.
-7. [ ] Dependency housekeeping.
-   - `npm audit` reports 6 vulnerabilities (5 high, 1 critical) in the installed tree,
-     transitively via `sharp`, `ws`, and `source-map-js`. Check whether `npm audit fix`
-     resolves them without a breaking bump.
+7. [~] Dependency housekeeping.
+   - Next was on 15.5.14, which carried two unauthenticated RCE advisories and several
+     middleware/proxy bypasses. Bumped to 15.5.27 within the existing `^15.2.0` range.
+     Production vulnerabilities went from 4 (1 critical, 3 high) to 2 (1 high, 1 moderate).
+   - **Decision needed:** everything remaining requires a major bump, Next 16 for the two
+     production issues and Vitest 5 for the dev ones. Left alone deliberately.
 
 Definition of done:
 

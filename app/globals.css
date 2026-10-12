@@ -157,6 +157,7 @@ a {
 .brand {
   display: inline-flex;
   align-items: center;
+  min-height: 44px;
   gap: 12px;
   font-weight: 700;
   letter-spacing: -0.02em;
@@ -853,7 +854,10 @@ h2 {
 }
 
 .sidebar__nav a {
-  padding: 11px 14px;
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 14px;
   border-radius: var(--r-control);
   background: var(--surface-2);
   border: 1px solid transparent;
@@ -876,12 +880,20 @@ h2 {
 
 .app-content {
   display: grid;
+  /* minmax(0, 1fr) rather than an implicit auto track: an auto track is sized
+     by its content's min-content width and cannot shrink below it, which
+     overflowed the workspace by ~240px at 390px. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 20px;
   min-width: 0;
 }
 
 /* Project workspace. Block flow so the sticky rail holds for the whole page
    (a sticky grid item would only stick within its own row). */
+.workspace {
+  min-width: 0;
+}
+
 .workspace > * {
   margin-bottom: 20px;
 }
@@ -914,8 +926,12 @@ h2 {
   scrollbar-width: thin;
 }
 
+/* 44px minimum tap target. This gets used on site, often one-handed. */
 .section-rail a {
-  padding: 8px 14px;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 14px;
   border-radius: var(--r-pill);
   color: var(--muted);
   font-size: 0.9rem;
@@ -1080,6 +1096,25 @@ h2 {
   font-size: 0.88em;
 }
 
+/* Tells the user a list is clipped, and links to the rest. */
+.list-note {
+  margin: 14px 0 0;
+  font-size: 0.88rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.list-note a {
+  color: var(--accent-ink);
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.list-note a:hover {
+  color: var(--ink);
+}
+
 .toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -1160,8 +1195,10 @@ h2 {
     gap: 16px;
   }
 
+  /* Stats stay two-up. Short label plus a number reads fine at this width,
+     and stacking six of them one-per-row buries the rest of the section. */
   .stats-row {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .hero-actions .button {

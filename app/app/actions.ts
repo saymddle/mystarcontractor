@@ -6,6 +6,11 @@ import { redirect } from "next/navigation";
 import { signOutAction } from "@/app/auth/actions";
 import { getAppOrigin } from "@/lib/app-url";
 import type { FormState } from "@/lib/form-state";
+import {
+  ensureSafeText,
+  validateMilestone,
+  validateUploadFile
+} from "@/lib/validation";
 import { sendEmail } from "@/lib/email";
 import {
   createSupabaseAdminClient,
@@ -20,17 +25,6 @@ import type {
   ProjectStatus
 } from "@/lib/types";
 
-const MAX_DOCUMENT_BYTES = 25 * 1024 * 1024;
-const MAX_PHOTO_BYTES = 15 * 1024 * 1024;
-const ALLOWED_DOCUMENT_TYPES = new Set([
-  "application/pdf",
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "text/plain",
-  "image/jpeg",
-  "image/png"
-]);
-const ALLOWED_PHOTO_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 function getString(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -147,41 +141,6 @@ async function getProjectRecipients(projectId: string) {
 
 function sanitizeFileName(name: string) {
   return name.replace(/[^a-zA-Z0-9._-]/g, "-").toLowerCase();
-}
-
-function ensureSafeText(value: string, maxLength: number, label: string) {
-  if (!value) {
-    throw new Error(`${label} is required.`);
-  }
-
-  if (value.length > maxLength) {
-    throw new Error(`${label} must be ${maxLength} characters or fewer.`);
-  }
-}
-
-function validateUploadFile(
-  file: File,
-  folder: "documents" | "photos"
-) {
-  if (folder === "documents") {
-    if (file.size > MAX_DOCUMENT_BYTES) {
-      throw new Error("Documents must be 25 MB or smaller.");
-    }
-
-    if (file.type && !ALLOWED_DOCUMENT_TYPES.has(file.type)) {
-      throw new Error("Document type not supported. Use PDF, Word, text, JPG, or PNG.");
-    }
-
-    return;
-  }
-
-  if (file.size > MAX_PHOTO_BYTES) {
-    throw new Error("Photos must be 15 MB or smaller.");
-  }
-
-  if (file.type && !ALLOWED_PHOTO_TYPES.has(file.type)) {
-    throw new Error("Photo type not supported. Use JPG, PNG, or WEBP.");
-  }
 }
 
 async function sendNotificationEmails(params: {
@@ -498,20 +457,6 @@ export async function createClientInviteAction(
   });
 
   return revalidatedSuccess(projectId, `Invite sent to ${email}.`);
-}
-
-/** Shared milestone field checks for both create and update. */
-function validateMilestone(title: string, percentComplete: number) {
-  const fieldErrors: Record<string, string> = {};
-
-  if (!title) {
-    fieldErrors.title = "Give the milestone a title.";
-  }
-  if (Number.isNaN(percentComplete) || percentComplete < 0 || percentComplete > 100) {
-    fieldErrors.percentComplete = "Enter a whole number between 0 and 100.";
-  }
-
-  return fieldErrors;
 }
 
 export async function createMilestoneAction(
