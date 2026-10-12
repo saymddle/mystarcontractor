@@ -2,19 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { BrandHeader } from "@/components/brand-header";
 import { getOptionalUserContext } from "@/lib/auth";
-import {
-  activityFeed,
-  clientMoments,
-  documentGroups,
-  milestones,
-  projectSummary
-} from "@/lib/mock-data";
-
-const platformPillars = [
-  "Project-based document control with client-safe publishing",
-  "Progress photos and milestone tracking in one shared timeline",
-  "Role-aware communication between project managers and clients"
-];
+import { documentGroups, milestones, platformPillars } from "@/lib/mock-data";
 
 export const dynamic = "force-dynamic";
 
@@ -32,114 +20,167 @@ export default async function HomePage() {
       <section className="hero-panel">
         <div className="hero-copy">
           <p className="eyebrow">Construction management platform</p>
-          <h1>One workspace for jobs, updates, documents, and client trust.</h1>
+          <h1>Run every job from one shared workspace.</h1>
           <p className="hero-text">
-            My Star Contractor brings project managers and clients into the same
-            operating system without exposing the internal noise that slows a
-            build down.
+            Project managers and clients see the same schedule, documents, and
+            photos. Internal noise stays internal.
           </p>
           <div className="hero-actions">
             <Link href="/auth" className="button button--solid">
-              Sign in or create account
+              Create your account
             </Link>
-            <Link href="/app" className="button button--ghost">
-              Open app workspace
+            <Link href="#workflow" className="button button--ghost">
+              See how it works
             </Link>
           </div>
         </div>
 
-        <div className="hero-card">
-          <div className="hero-card__header">
-            <span>Active project snapshot</span>
-            <strong>{projectSummary.status}</strong>
-          </div>
-          <h2>{projectSummary.name}</h2>
-          <div className="progress-row">
-            <span>Overall completion</span>
-            <strong>{projectSummary.percentComplete}%</strong>
-          </div>
-          <div className="progress-bar" aria-hidden="true">
-            <span style={{ width: `${projectSummary.percentComplete}%` }} />
-          </div>
-          <dl className="snapshot-list">
-            <div>
-              <dt>Next milestone</dt>
-              <dd>{projectSummary.nextMilestone}</dd>
-            </div>
-            <div>
-              <dt>Last update</dt>
-              <dd>{projectSummary.updatedAt}</dd>
-            </div>
-          </dl>
+        {/* TODO: hero photograph, 1600x1200 (4:3). A real job site, wide shot.
+            Replace this slot with:
+            <Image src="/hero.jpg" alt="..." width={1600} height={1200} priority
+                   sizes="(max-width: 920px) 100vw, 45vw" /> */}
+        <div className="hero-figure figure--slot">
+          <span>Hero photograph, 4:3. Wide shot of an active job site.</span>
         </div>
       </section>
 
-      <section className="insight-strip" id="platform">
-        {platformPillars.map((pillar) => (
-          <article key={pillar} className="insight-card">
-            <p>{pillar}</p>
-          </article>
-        ))}
+      <section className="section" id="platform">
+        <div className="insight-strip insight-strip--media">
+          <div>
+            <h2 className="section-title">
+              Built around how a job actually runs.
+            </h2>
+            <ul className="pillar-list">
+              {platformPillars.map((pillar) => (
+                <li key={pillar.title}>
+                  <strong>{pillar.title}</strong>
+                  <span>{pillar.detail}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* TODO: supporting photograph, 900x1200 (3:4). Project manager on
+              site with drawings or a tablet. */}
+          <div className="figure figure--slot">
+            <span>Supporting photograph, portrait. Project manager on site.</span>
+          </div>
+        </div>
       </section>
 
-      <section className="content-grid" id="workflow">
-        <article className="panel">
-          <div className="panel__heading">
-            <p className="eyebrow">Milestone tracking</p>
-            <h2>Run projects from structured stages, not scattered check-ins.</h2>
-          </div>
-          <div className="milestone-list">
-            {milestones.map((milestone) => (
-              <div key={milestone.name} className="milestone-item">
-                <div>
-                  <strong>{milestone.name}</strong>
-                  <span>{milestone.status}</span>
+      <section className="section" id="workflow">
+        <h2 className="section-title">
+          Stages and files, not scattered check-ins.
+        </h2>
+        <div className="content-grid">
+          <article className="panel">
+            <div className="panel__heading">
+              <h2>Milestone tracking</h2>
+              <p>
+                Overall completion is derived from milestone progress, so the
+                number is never hand-maintained.
+              </p>
+            </div>
+            <div className="milestone-list">
+              {milestones.map((milestone) => (
+                <div key={milestone.name} className="milestone-item">
+                  <div>
+                    <strong>{milestone.name}</strong>
+                    <span>{milestone.status}</span>
+                  </div>
+                  <strong>{milestone.percent}%</strong>
                 </div>
-                <strong>{milestone.percent}%</strong>
-              </div>
-            ))}
-          </div>
-        </article>
+              ))}
+            </div>
+          </article>
 
-        <article className="panel">
-          <div className="panel__heading">
-            <p className="eyebrow">Document management</p>
-            <h2>Organize every permit set, contract, and change order by job.</h2>
-          </div>
-          <div className="document-grid">
-            {documentGroups.map((group) => (
-              <div key={group.label} className="document-card">
-                <strong>{group.label}</strong>
-                <span>{group.count} files</span>
-              </div>
-            ))}
-          </div>
-        </article>
+          <article className="panel">
+            <div className="panel__heading">
+              <h2>Document management</h2>
+              <p>
+                Every permit set, contract, and change order is filed against
+                the job it belongs to.
+              </p>
+            </div>
+            <div className="document-grid">
+              {documentGroups.map((group) => (
+                <div key={group.label} className="document-card">
+                  <strong>{group.label}</strong>
+                  <span className="num">{group.count}</span>
+                </div>
+              ))}
+            </div>
+          </article>
+        </div>
       </section>
 
-      <section className="role-grid" id="roles">
-        <article className="panel panel--warm">
-          <p className="eyebrow">For project managers</p>
-          <h2>Control the flow of information without losing speed.</h2>
-          <ul className="list">
-            {activityFeed.map((item) => (
-              <li key={item.title}>
-                <strong>{item.title}</strong>
-                <span>{item.detail}</span>
+      <section className="section" id="roles">
+        <h2 className="section-title">Two views of the same job.</h2>
+        <div className="insight-strip">
+          <article className="panel">
+            <div className="panel__heading">
+              <h2>For project managers</h2>
+              <p>
+                Full edit control over milestones, uploads, and what gets
+                published to the client.
+              </p>
+            </div>
+            <ul className="list">
+              <li>
+                <div>
+                  <strong>Upload once, decide who sees it</strong>
+                  <span>
+                    Documents and photos default to internal until you publish
+                    them.
+                  </span>
+                </div>
               </li>
-            ))}
-          </ul>
-        </article>
+              <li>
+                <div>
+                  <strong>Track the build stage by stage</strong>
+                  <span>
+                    Milestone status and percent complete roll up automatically.
+                  </span>
+                </div>
+              </li>
+              <li>
+                <div>
+                  <strong>Invite clients directly</strong>
+                  <span>
+                    Send an invite link that assigns project access on signup.
+                  </span>
+                </div>
+              </li>
+            </ul>
+          </article>
 
-        <article className="panel panel--dark">
-          <p className="eyebrow">For clients</p>
-          <h2>A clean portal that shows what matters now.</h2>
-          <ul className="list">
-            {clientMoments.map((moment) => (
-              <li key={moment}>{moment}</li>
-            ))}
-          </ul>
-        </article>
+          <article className="panel panel--accent">
+            <div className="panel__heading">
+              <h2>For clients</h2>
+              <p>A filtered, read-only portal with no internal clutter.</p>
+            </div>
+            <ul className="list">
+              <li>
+                <div>
+                  <strong>Published progress photos</strong>
+                  <span>From the latest site walk.</span>
+                </div>
+              </li>
+              <li>
+                <div>
+                  <strong>Approved documents</strong>
+                  <span>Permit sets and contracts as they are released.</span>
+                </div>
+              </li>
+              <li>
+                <div>
+                  <strong>A direct message thread</strong>
+                  <span>One place to ask, scoped to the project.</span>
+                </div>
+              </li>
+            </ul>
+          </article>
+        </div>
       </section>
     </main>
   );

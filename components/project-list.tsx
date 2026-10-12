@@ -21,39 +21,38 @@ export function ProjectList({
   projects: ProjectRecord[];
   emptyCopy: string;
 }) {
-  if (projects.length === 0) {
-    return (
-      <article className="panel">
-        <p className="eyebrow">Projects</p>
-        <h2>No projects yet.</h2>
-        <p className="hero-text">{emptyCopy}</p>
-      </article>
-    );
-  }
-
   return (
     <article className="panel">
-      <p className="eyebrow">Projects</p>
-      <h2>Current project list</h2>
-      <div className="project-list">
-        {projects.map((project) => (
-          <Link
-            key={project.id}
-            href={`/app/projects/${project.id}` as Route}
-            className="project-card"
-          >
-            <div className="project-card__header">
-              <strong>{project.name}</strong>
-              <span className="status-pill">{project.status.replace("_", " ")}</span>
-            </div>
-            <p>{project.location || "Location not set"}</p>
-            <div className="project-card__meta">
-              <span>Start {formatDate(project.start_date)}</span>
-              <span>Target {formatDate(project.target_end_date)}</span>
-            </div>
-          </Link>
-        ))}
+      <div className="panel__heading">
+        <h2>{projects.length === 0 ? "No projects yet" : "All projects"}</h2>
       </div>
+      {projects.length === 0 ? (
+        <div className="empty-state">
+          <p>{emptyCopy}</p>
+        </div>
+      ) : (
+        <div className="project-list">
+          {projects.map((project) => (
+            <Link
+              key={project.id}
+              href={`/app/projects/${project.id}` as Route}
+              className="project-card"
+            >
+              <div className="project-card__header">
+                <strong>{project.name}</strong>
+                <span className="status-pill">
+                  {project.status.replace("_", " ")}
+                </span>
+              </div>
+              <p>{project.location || "Location not set"}</p>
+              <div className="project-card__meta">
+                <span>Start {formatDate(project.start_date)}</span>
+                <span>Target {formatDate(project.target_end_date)}</span>
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
     </article>
   );
 }

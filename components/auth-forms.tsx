@@ -1,14 +1,22 @@
+"use client";
+
+import { useActionState } from "react";
+import { Field } from "@/components/field";
+import { FormAlert } from "@/components/form-alert";
+import { idleFormState, type FormState } from "@/lib/form-state";
+
+type AuthAction = (
+  previous: FormState,
+  formData: FormData
+) => Promise<FormState>;
+
 export function AuthForms({
   signInAction,
   signUpAction,
-  message,
-  error,
   invite
 }: {
-  signInAction: (formData: FormData) => Promise<void>;
-  signUpAction: (formData: FormData) => Promise<void>;
-  message?: string;
-  error?: string;
+  signInAction: AuthAction;
+  signUpAction: AuthAction;
   invite?: {
     token: string;
     email: string;
@@ -19,102 +27,185 @@ export function AuthForms({
     usable: boolean;
   };
 }) {
+  const [signInState, submitSignIn, signInPending] = useActionState(
+    signInAction,
+    idleFormState
+  );
+  const [signUpState, submitSignUp, signUpPending] = useActionState(
+    signUpAction,
+    idleFormState
+  );
+
+  const signInErrors = signInState.fieldErrors ?? {};
+  const signUpErrors = signUpState.fieldErrors ?? {};
+  const signUpValues = signUpState.values ?? {};
+
   return (
     <section className="auth-grid">
       <article className="panel">
-        <p className="eyebrow">Sign in</p>
-        <h2>Return to your workspace</h2>
-        <form action={signInAction} className="form-stack">
-          <label className="field">
-            <span>Email</span>
-            <input type="email" name="email" required />
-          </label>
-          <label className="field">
-            <span>Password</span>
-            <input type="password" name="password" required minLength={8} />
-          </label>
-          <button type="submit" className="button button--solid">
-            Sign in
+        <div className="panel__heading">
+          <h2>Return to your workspace</h2>
+        </div>
+        <form action={submitSignIn} className="form-stack" noValidate>
+          <FormAlert state={signInState} />
+          <Field name="signin-email" label="Email" error={signInErrors.email}>
+            {(aria) => (
+              <input
+                {...aria}
+                type="email"
+                name="email"
+                autoComplete="email"
+                defaultValue={signInState.values?.email ?? ""}
+              />
+            )}
+          </Field>
+          <Field name="signin-password" label="Password" error={signInErrors.password}>
+            {(aria) => (
+              <input
+                {...aria}
+                type="password"
+                name="password"
+                autoComplete="current-password"
+              />
+            )}
+          </Field>
+          <button
+            type="submit"
+            className="button button--solid"
+            disabled={signInPending}
+          >
+            {signInPending ? "Signing in..." : "Sign in"}
           </button>
         </form>
       </article>
 
-      <article className="panel panel--warm">
-        <p className="eyebrow">Create account</p>
-        <h2>{invite?.usable ? "Accept client invite" : "Set up a PM or client login"}</h2>
-        <form action={signUpAction} className="form-stack">
+      <article className="panel panel--accent">
+        <div className="panel__heading">
+          <h2>{invite?.usable ? "Accept client invite" : "Create an account"}</h2>
+        </div>
+        <form action={submitSignUp} className="form-stack" noValidate>
+          <FormAlert state={signUpState} />
+
           {invite?.token ? (
             <input type="hidden" name="inviteToken" value={invite.token} />
           ) : null}
-          <label className="field">
-            <span>Full name</span>
-            <input type="text" name="fullName" required />
-          </label>
-          <label className="field">
-            <span>Email</span>
-            <input
-              type="email"
-              name="email"
-              required
-              defaultValue={invite?.email ?? ""}
-              readOnly={invite?.usable}
-            />
-          </label>
-          <label className="field">
-            <span>Password</span>
-            <input type="password" name="password" required minLength={8} />
-          </label>
+
+          <Field name="signup-fullName" label="Full name" error={signUpErrors.fullName}>
+            {(aria) => (
+              <input
+                {...aria}
+                type="text"
+                name="fullName"
+                autoComplete="name"
+                defaultValue={signUpValues.fullName ?? ""}
+              />
+            )}
+          </Field>
+
+          <Field name="signup-email" label="Email" error={signUpErrors.email}>
+            {(aria) => (
+              <input
+                {...aria}
+                type="email"
+                name="email"
+                autoComplete="email"
+                readOnly={invite?.usable}
+                defaultValue={signUpValues.email ?? invite?.email ?? ""}
+              />
+            )}
+          </Field>
+
+          <Field
+            name="signup-password"
+            label="Password"
+            error={signUpErrors.password}
+            hint="At least 8 characters."
+          >
+            {(aria) => (
+              <input
+                {...aria}
+                type="password"
+                name="password"
+                autoComplete="new-password"
+              />
+            )}
+          </Field>
+
           {invite?.usable ? (
             <input type="hidden" name="role" value="client" />
           ) : (
-            <label className="field">
-              <span>Role</span>
-              <select name="role" defaultValue="pm">
-                <option value="pm">Project manager</option>
-                <option value="client">Client</option>
-              </select>
-            </label>
+            <Field name="signup-role" label="Role" error={signUpErrors.role}>
+              {(aria) => (
+                <select
+                  {...aria}
+                  name="role"
+                  defaultValue={signUpValues.role || "pm"}
+                >
+                  <option value="pm">Project manager</option>
+                  <option value="client">Client</option>
+                </select>
+              )}
+            </Field>
           )}
-          {!invite?.usable ? (
-            <label className="field">
-              <span>Organization name</span>
-              <input
-                type="text"
-                name="organizationName"
-                placeholder="Required for PM sign-up"
-              />
-            </label>
-          ) : (
-            <article className="invite-banner">
+
+          {invite?.usable ? (
+            <div className="invite-banner">
               <strong>{invite.project_name}</strong>
               <span>
-                Organization slug: <code>{invite.organization_slug}</code>
+                Organization: <code>{invite.organization_slug}</code>
               </span>
-            </article>
+            </div>
+          ) : (
+            <Field
+              name="signup-organizationName"
+              label="Organization name"
+              error={signUpErrors.organizationName}
+              hint="Required when signing up as a project manager. Leave blank if you are joining as a client."
+            >
+              {(aria) => (
+                <input
+                  {...aria}
+                  type="text"
+                  name="organizationName"
+                  autoComplete="organization"
+                  defaultValue={signUpValues.organizationName ?? ""}
+                />
+              )}
+            </Field>
           )}
-          <label className="field">
-            <span>Organization slug</span>
-            <input
-              type="text"
-              name="organizationSlug"
-              placeholder="Used by PMs to create or clients to join"
-              required
-              defaultValue={invite?.organization_slug ?? ""}
-              readOnly={invite?.usable}
-            />
-          </label>
-          <button type="submit" className="button button--solid">
-            {invite?.usable ? "Accept invite" : "Create account"}
+
+          <Field
+            name="signup-organizationSlug"
+            label="Organization slug"
+            error={signUpErrors.organizationSlug}
+            hint="Project managers choose a new slug. Clients enter the slug their project manager gave them."
+          >
+            {(aria) => (
+              <input
+                {...aria}
+                type="text"
+                name="organizationSlug"
+                readOnly={invite?.usable}
+                defaultValue={
+                  signUpValues.organizationSlug ?? invite?.organization_slug ?? ""
+                }
+              />
+            )}
+          </Field>
+
+          <button
+            type="submit"
+            className="button button--solid"
+            disabled={signUpPending}
+          >
+            {signUpPending
+              ? "Creating account..."
+              : invite?.usable
+                ? "Accept invite"
+                : "Create account"}
           </button>
         </form>
       </article>
-
-      {(message || error) && (
-        <article className={`panel message-panel ${error ? "panel--error" : ""}`}>
-          <p className="eyebrow">{error ? "Action failed" : "Status"}</p>
-          <p className="message-copy">{error ?? message}</p>
-        </article>
-      )}
     </section>
   );
 }

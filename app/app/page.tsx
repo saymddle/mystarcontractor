@@ -15,20 +15,27 @@ export default async function AppDashboard({
   const onboarding = await getOnboardingSummary(profile);
   const params = await searchParams;
   const recentProjects = projects.slice(0, 3);
+  const isPm = profile.role === "pm";
 
   return (
     <section className="dashboard-stack">
+      {params.error ? (
+        <article className="panel panel--error" role="alert" aria-live="polite">
+          <p className="eyebrow">Action failed</p>
+          <p className="message-copy">{params.error}</p>
+        </article>
+      ) : null}
+
       <article className="panel">
-        <p className="eyebrow">Dashboard</p>
         <h1>
-          {profile.role === "pm"
+          {isPm
             ? "Manage access, projects, and client assignments."
-            : "Track the projects that have been assigned to you."}
+            : "Track the projects assigned to you."}
         </h1>
         <p className="hero-text">
-          {profile.role === "pm"
-            ? "Phase 1 is now wired for real accounts, protected routes, and project ownership."
-            : "Your portal is now backed by authenticated project membership instead of a demo page."}
+          {isPm
+            ? "Create projects, assign clients, and control what gets published to the client portal."
+            : "Documents, photos, and updates appear here once your project manager publishes them."}
         </p>
       </article>
 
@@ -39,7 +46,7 @@ export default async function AppDashboard({
         </article>
         <article className="stat-card">
           <span>Role</span>
-          <strong>{profile.role === "pm" ? "Project manager" : "Client"}</strong>
+          <strong>{isPm ? "Project manager" : "Client"}</strong>
         </article>
         <article className="stat-card">
           <span>Organization</span>
@@ -47,51 +54,52 @@ export default async function AppDashboard({
         </article>
       </section>
 
-      {profile.role === "pm" ? (
+      {isPm ? (
         <article className="panel">
           <div className="panel__heading">
-            <p className="eyebrow">Onboarding</p>
             <h2>Launch checklist</h2>
           </div>
           <ul className="list">
             <li>
-              <strong>Create your first project</strong>
-              <span>{onboarding.projectCount > 0 ? "Complete" : "Pending"}</span>
+              <div>
+                <strong>Create your first project</strong>
+              </div>
+              <span className="status-pill">
+                {onboarding.projectCount > 0 ? "Complete" : "Pending"}
+              </span>
             </li>
             <li>
-              <strong>Add or invite a client</strong>
-              <span>
+              <div>
+                <strong>Add or invite a client</strong>
+              </div>
+              <span className="status-pill">
                 {onboarding.clientCount > 0 || onboarding.pendingInviteCount > 0
                   ? "In progress"
                   : "Pending"}
               </span>
             </li>
             <li>
-              <strong>Publish an update and send a message</strong>
-              <span>{onboarding.projectCount > 0 ? "Ready" : "Blocked"}</span>
+              <div>
+                <strong>Publish an update and send a message</strong>
+              </div>
+              <span className="status-pill">
+                {onboarding.projectCount > 0 ? "Ready" : "Blocked"}
+              </span>
             </li>
           </ul>
         </article>
       ) : null}
 
-      {params.error ? (
-        <article className="panel panel--error">
-          <p className="eyebrow">Action failed</p>
-          <p className="message-copy">{params.error}</p>
-        </article>
-      ) : null}
-
       <article className="panel">
         <div className="panel__heading">
-          <p className="eyebrow">Recent projects</p>
-          <h2>{profile.role === "pm" ? "Your organization" : "Your assignments"}</h2>
+          <h2>{isPm ? "Recent projects" : "Your assignments"}</h2>
         </div>
         {recentProjects.length === 0 ? (
           <div className="empty-state">
-            <p className="hero-text">
-              {profile.role === "pm"
-                ? "Create your first project in the Projects view and start publishing structured updates from there."
-                : "No projects have been assigned to your account yet. Once your PM assigns one, messages and published updates will show up here."}
+            <p>
+              {isPm
+                ? "No projects yet. Create your first one in the Projects view to start tracking milestones and publishing updates."
+                : "No projects have been assigned to your account yet. Once your project manager assigns one, it will appear here."}
             </p>
           </div>
         ) : (

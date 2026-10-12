@@ -4,34 +4,61 @@ import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 import { getAppOrigin } from "@/lib/app-url";
+import type { FormState } from "@/lib/form-state";
 
 function getString(formData: FormData, key: string) {
   const value = formData.get(key);
   return typeof value === "string" ? value.trim() : "";
 }
 
-function encodeMessage(value: string) {
-  return encodeURIComponent(value);
+/**
+ * Supabase returns one generic message for a wrong email and a wrong password
+ * alike, on purpose, so an attacker cannot enumerate accounts. Keep that
+ * ambiguity: attaching it to a single field would imply the other one is fine.
+ */
+function isCredentialFailure(message: string) {
+  return /invalid login credentials/i.test(message);
 }
 
-export async function signInAction(formData: FormData) {
+export async function signInAction(
+  _previous: FormState,
+  formData: FormData
+): Promise<FormState> {
   const email = getString(formData, "email");
   const password = getString(formData, "password");
+  const values = { email };
+
+  const fieldErrors: Record<string, string> = {};
+  if (!email) {
+    fieldErrors.email = "Enter your email address.";
+  }
+  if (!password) {
+    fieldErrors.password = "Enter your password.";
+  }
+  if (Object.keys(fieldErrors).length > 0) {
+    return { status: "error", fieldErrors, values };
+  }
 
   const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.auth.signInWithPassword({
-    email,
-    password
-  });
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
-    redirect(`/auth?error=${encodeMessage(error.message)}`);
+    return {
+      status: "error",
+      message: isCredentialFailure(error.message)
+        ? "That email and password do not match an account."
+        : error.message,
+      values
+    };
   }
 
   redirect("/app");
 }
 
-export async function signUpAction(formData: FormData) {
+export async function signUpAction(
+  _previous: FormState,
+  formData: FormData
+): Promise<FormState> {
   const fullName = getString(formData, "fullName");
   const email = getString(formData, "email");
   const password = getString(formData, "password");
@@ -41,6 +68,21 @@ export async function signUpAction(formData: FormData) {
   let organizationSlug = getString(formData, "organizationSlug")
     .toLowerCase()
     .replace(/\s+/g, "-");
+
+  const values = { fullName, email, role, organizationName, organizationSlug };
+  const fieldErrors: Record<string, string> = {};
+
+  if (!fullName) {
+    fieldErrors.fullName = "Enter your full name.";
+  }
+  if (!email) {
+    fieldErrors.email = "Enter your email address.";
+  }
+  if (!password) {
+    fieldErrors.password = "Choose a password.";
+  } else if (password.length < 8) {
+    fieldErrors.password = "Use at least 8 characters.";
+  }
 
   if (inviteToken) {
     const admin = createSupabaseAdminClient();
@@ -77,23 +119,38 @@ export async function signUpAction(formData: FormData) {
       : false;
 
     if (!invite || invite.status !== "pending" || isExpired || !organization) {
-      redirect("/auth?error=This%20invite%20is%20no%20longer%20valid.");
+      // Nothing the user can fix in a field, so this stays page-level.
+      return {
+        status: "error",
+        message: "This invite is no longer valid. Ask your project manager to send a new one.",
+        values
+      };
     }
 
     if (invite.email.toLowerCase() !== email.toLowerCase()) {
-      redirect("/auth?error=Use%20the%20same%20email%20address%20that%20received%20the%20invite.");
+      fieldErrors.email = `This invite is reserved for ${invite.email}.`;
     }
 
     role = "client";
     organizationSlug = organization.slug;
+  } else {
+    if (!["pm", "client"].includes(role)) {
+      fieldErrors.role = "Select a role.";
+    }
+    if (role === "pm" && !organizationName) {
+      fieldErrors.organizationName =
+        "Project managers must name the organization they are creating.";
+    }
+    if (!organizationSlug) {
+      fieldErrors.organizationSlug =
+        role === "client"
+          ? "Enter the organization slug your project manager gave you."
+          : "Choose a short slug for your organization, such as kestrel-build.";
+    }
   }
 
-  if (!["pm", "client"].includes(role)) {
-    redirect("/auth?error=Select%20a%20valid%20role.");
-  }
-
-  if (role === "pm" && !organizationName) {
-    redirect("/auth?error=Project%20managers%20must%20provide%20an%20organization%20name.");
+  if (Object.keys(fieldErrors).length > 0) {
+    return { status: "error", fieldErrors, values };
   }
 
   const supabase = await createSupabaseServerClient();
@@ -113,13 +170,23 @@ export async function signUpAction(formData: FormData) {
   });
 
   if (error) {
-    redirect(`/auth?error=${encodeMessage(error.message)}`);
+    // An existing account is a problem with the email field specifically.
+    if (/already registered|already exists/i.test(error.message)) {
+      return {
+        status: "error",
+        fieldErrors: { email: "An account already uses this email address." },
+        values
+      };
+    }
+
+    return { status: "error", message: error.message, values };
   }
 
   if (!data.session) {
-    redirect(
-      "/auth?message=Account%20created.%20Check%20your%20email%20to%20confirm%20sign-in."
-    );
+    return {
+      status: "success",
+      message: "Account created. Check your email to confirm your address, then sign in."
+    };
   }
 
   redirect("/app");

@@ -35,10 +35,10 @@ export function AppShell({
         </Link>
 
         <div className="sidebar__block">
-          <p className="eyebrow">Workspace</p>
           <h2>{profile.organization?.name ?? "Organization"}</h2>
-          <p className="hero-text">
-            Signed in as {profile.full_name ?? "User"} ({profile.role}).
+          <p className="sidebar__copy">
+            {profile.full_name ?? "User"} ·{" "}
+            {profile.role === "pm" ? "Project manager" : "Client"}
           </p>
         </div>
 
