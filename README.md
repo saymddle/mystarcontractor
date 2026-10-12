@@ -5,7 +5,7 @@ Construction management platform for project managers and clients.
 ## Current status
 
 - Current phase: `Phase 4 in progress`
-- Overall status: `Phases 1-3 are complete and on main. The redesign and the Phase 4 data fixes are on claude/site-redesign-audit-2xfa57, open as PR #1. Everything that can be verified without database credentials has been; nothing has been run against live Supabase.`
+- Overall status: `Phases 1-3 are complete and on main. The redesign and Phase 4 data fixes are on claude/site-redesign-audit-2xfa57, open as PR #1. The app now runs against live Supabase and the RLS access boundary is verified. The signed-in UI walkthrough still needs a service role key.`
 - Rule: update this README whenever a phase is completed or the roadmap changes
 
 ## Tech stack
@@ -213,7 +213,7 @@ Definition of done:
 
 ### Phase 4 - Land the redesign and fix data correctness
 
-Status: `In progress - blocked on database credentials`
+Status: `In progress - partially unblocked`
 
 Goal: get the finished redesign onto main, prove it works against real data, and fix the
 query bugs that only show up once a project has real volume.
@@ -221,15 +221,25 @@ query bugs that only show up once a project has real volume.
 Tasks in build order:
 
 1. [x] Open the PR. `#1`, awaiting review and merge.
-2. [ ] Run the redesigned app against live Supabase. **Blocked:** no `.env.local`, no
-   Supabase credentials in the environment, and the Supabase MCP server disconnected
-   before it could be used.
+2. [~] Run the redesigned app against live Supabase.
+   - Project `mbieaxdokxlonnghpusp` located and confirmed as this app's database: all 13
+     tables present, 8 projects, 13 profiles, real documents, photos, messages and updates.
+     It is not enumerated by `list_projects`, so it has to be addressed by ref directly.
+   - `.env.local` written with the URL and anon key. The app boots and `/auth` renders the
+     real forms rather than the setup panel, so the connection works.
+   - **Still blocked:** `SUPABASE_SERVICE_ROLE_KEY` is not obtainable through the Supabase
+     MCP, which exposes publishable keys only. Without it `createSupabaseAdminClient`
+     throws, so `attachSignedUrls` fails and any project workspace holding documents or
+     photos will error. Needed from the dashboard under Settings, API, service_role.
+   - Also still needed: credentials for an existing PM and client account, or the service
+     role key so `npm run seed:demo` can create a fresh pair.
    - The authenticated surfaces have never been seen with real data. They were verified
      with a temporary preview route using stub data, which proves layout and styling but
      not behaviour.
    - Re-run the Phase 1-3 validation checklists. Every form was rewritten, so prior
      validation no longer covers the current code.
-3. [ ] Verify inline errors against real Supabase error strings. **Blocked**, same reason.
+3. [ ] Verify inline errors against real Supabase error strings. **Blocked:** needs
+   signed-in sessions, so it follows task 2.
    - The mapping from Supabase messages to field errors is reasoned, not tested. Check
      duplicate signup, wrong password, expired invite, oversized upload, and RLS denial.
 4. [x] Fix the message thread window.
@@ -259,16 +269,20 @@ usable where the work actually happens.
 Tasks in build order:
 
 1. [x] Add a test framework. Vitest, `npm test`.
-2. [~] Test the PM/client visibility boundary first, before anything else.
+2. [x] Test the PM/client visibility boundary first, before anything else.
    - The worst-case bug in this product is an internal document, photo, note, or activity
      event reaching a client. That boundary is enforced by RLS policies plus visibility
      filters in `lib/data.ts`, and nothing re-checks it automatically.
    - `lib/visibility.ts` now constrains asset queries by role as well, so a client is
      pinned to `client_visible` regardless of what arrives in the URL. Two independent
      mechanisms must fail before anything leaks. Covered by `tests/visibility.test.ts`.
-   - **Still outstanding:** the RLS policies themselves are untested and need an
-     integration test against Postgres with the migrations applied. The unit tests cover
-     the application-layer constraint in front of them, not the policies.
+   - The RLS policies themselves are now covered by `tests/rls/access-boundary.sql`,
+     verified against the live database on 2026-10-12. It is read-only and writes nothing.
+     Confirmed there: a client reads zero internal documents, photos, activity events and
+     updates while still reading the client-visible ones; a project manager reads both; and
+     a non-member reads zero rows across all seven project tables, including the project
+     row itself. The failure path was checked by inverting an assertion and watching it
+     raise, so a clean run is meaningful.
 3. [x] Test the server actions' validation branches, which are now the input gate.
    - Rules extracted to `lib/validation.ts` and covered by `tests/validation.test.ts`.
 4. [x] Check the workspace on a phone.
@@ -285,7 +299,15 @@ Tasks in build order:
    - Platform section photograph, portrait, project manager on site.
    - Both slots already hold their final dimensions, so dropping images in shifts nothing.
    - Favicon and an Open Graph share image.
-7. [~] Dependency housekeeping.
+7. [ ] Act on the Supabase security advisors (surfaced 2026-10-12, all WARN, no ERROR).
+   - Leaked password protection is disabled. Enabling it checks new passwords against
+     HaveIBeenPwned and is a one-switch change in the Auth settings.
+   - `public.normalize_slug` has a mutable `search_path`. Every other helper function sets
+     it explicitly; this one was missed.
+   - The GraphQL exposure and `SECURITY DEFINER` executable warnings are expected for this
+     design, since RLS is what restricts the rows. Worth a read before launch rather than
+     a change.
+8. [~] Dependency housekeeping.
    - Next was on 15.5.14, which carried two unauthenticated RCE advisories and several
      middleware/proxy bypasses. Bumped to 15.5.27 within the existing `^15.2.0` range.
      Production vulnerabilities went from 4 (1 critical, 3 high) to 2 (1 high, 1 moderate).
